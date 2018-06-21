@@ -1,7 +1,8 @@
 import pymysql  as sql
+import common as c
 
 def sql_conn():
-	db = sql.connect("localhost","root","","stock")
+	db = sql.connect("localhost","root","","stocki")
 	return db
 
 def rcnt(qry):
@@ -18,7 +19,7 @@ def rcnt(qry):
     return rows
 
 def execQuery(qry):
-    pr("S","Executing Query "+qry,1)
+    c.pr("S","Executing Query "+qry,1)
     db_obj  = sql_conn()
     cursor  = db_obj.cursor()
     try:
