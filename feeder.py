@@ -59,20 +59,25 @@ def process_data(data,scrip):
 	return
 
 def store_data(data_map,scrip):
+	#Retuns the records which are not in DB
 	final_map = sanitize(data_map,scrip)
 	c.pr("I","Storing Data For "+scrip,1)
+	sql_hash = []
+	for key in final_map:
+		sql_ins = "('"+data_map[key]['D']+"','"+key+"',"+data_map[key]['O']+","+data_map[key]['L']+","+data_map[key]['H']+","+data_map[key]['C']+","+data_map[key]['V']+")"
+		sql_hash.append(sql_ins)
+	s.sql_insert(scrip,"time,timestamp,open,low,high,close,volume",sql_hash,20)
 	return 
+
 def sanitize(data_map,scrip):
 	c.pr("I","Sanitizing Data For "+scrip,1)
-	final_map = {}
+	final_map = []
 	db_data   = s.sql_hash(scrip,"timestamp","volume")
-	print(db_data)
 	for tk in data_map:
-		if tk in db_data:
-			print("YES --> "+tk)
-		else:
-			print("NO --> "+tk)
+		if tk not in db_data:
+			final_map.append(tk)
 	return final_map
+
 def fetch_param(ac_data):
 	opn   = ac_data['1. open']
 	hig   = ac_data['2. high']
@@ -107,7 +112,7 @@ def check_tables():
 			c.pr("I",scrip+" Table Exists",1)
 		else:
 			c.pr("I",scrip+" Table Needs To Be Created",1)
-			s.create_table(scrip,"time:DT,timestamp:TS,open:FL,low:FL,high:FL,close:FL,volume:IN")
+			s.create_table(scrip,"time:DT,timestamp:VC:15,open:FL,low:FL,high:FL,close:FL,volume:IN")
 	return
 #Script Flow Starts Here
 

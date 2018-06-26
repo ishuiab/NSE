@@ -5,6 +5,25 @@ def sql_conn():
 	db = sql.connect("localhost","root","","stocki")
 	return db
 
+def sql_insert(table,keys,data,limit):
+    c.pr("I","Initiating Insert Operation On Table -> "+table+" Query Limit -> "+str(limit)+" Columns -> "+str(len(data)),0)
+    ctr = 0
+    dap = ""
+    for clm in data:
+        if ctr == limit:
+            dap = dap[1:]
+            qry = "INSERT INTO "+table+" ("+keys+") VALUES "+dap
+            execQuery(qry)
+            dap = ""
+            ctr = 0
+        ctr = ctr + 1
+        dap = dap+","+clm
+    if ctr > 1:
+        dap = dap[1:]
+        qry = "INSERT INTO "+table+" ("+keys+") VALUES "+dap
+        execQuery(qry)
+    return
+
 def sql_hash(table,key,cols):
     query = ""
     ret   = {}
@@ -67,7 +86,7 @@ def create_table(name,schema):
         col = tmp[0]
         dt  = tmp[1]
         if dt == "VC":
-            size  = tmp[3]
+            size  = tmp[2]
             query = query+"`"+col+"` "+var_map[dt] + "("+size+") NOT NULL,"
         else:
             query = query+"`"+col+"` "+var_map[dt] + " NOT NULL,\n"
