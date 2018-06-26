@@ -12,7 +12,7 @@ def sql_insert(table,keys,data,limit):
     for clm in data:
         if ctr == limit:
             dap = dap[1:]
-            qry = "INSERT INTO "+table+" ("+keys+") VALUES "+dap
+            qry = "INSERT INTO `"+table+"` ("+keys+") VALUES "+dap
             execQuery(qry)
             dap = ""
             ctr = 0
@@ -20,7 +20,7 @@ def sql_insert(table,keys,data,limit):
         dap = dap+","+clm
     if ctr > 1:
         dap = dap[1:]
-        qry = "INSERT INTO "+table+" ("+keys+") VALUES "+dap
+        qry = "INSERT INTO `"+table+"` ("+keys+") VALUES "+dap
         execQuery(qry)
     return
 
@@ -64,7 +64,7 @@ def rcnt(qry):
     return rows
 
 def execQuery(qry):
-    c.pr("S","Executing Query "+qry,1)
+    #c.pr("S","Executing Query "+qry,1)
     db_obj  = sql_conn()
     cursor  = db_obj.cursor()
     try:

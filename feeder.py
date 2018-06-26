@@ -19,20 +19,57 @@ def init():
 	load_scrips()
 	fetch_data()
 	return	
+def clean_data(scrip):
+	c.pr("I","Performing Clean Up Opearations For Scrip "+scrip,1)
+	fix_missing_entries(scrip)
+	return
+
+def fix_missing_entries(scrip):
+	c.pr("I","Fixing Missing Entries For Scrip "+scrip,1)
+	return
 
 def fetch_data():
 	for scrip in scrips:
-		c.pr("I","Fetching Data For Script "+scrip,1)
-		#https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=ABB.NS&interval=1min&apikey=MCAF9B429I44328U
-		API_LINK = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&interval=1min&apikey=MCAF9B429I44328U&symbol="+scrips[scrip]['search']
-		#!!!Replace this code with fetching data from URL
-		FP = "C:\\Users\\ssadiq\\Documents\\NSE\\test_data\\ABB.json"
-		with open(FP) as f:
-			data = js.load(f)
-		#!!----------------------------------------------
-		c.pr("I","API Link -> "+API_LINK,1)
-		process_data(data,scrip)
+		#UNCOMMENT data = fetch_json(scrip)
+		#UNCOMMENT process_data(data,scrip)
+		clean_data(scrip)
 	return
+
+def fetch_json(scrip):
+	c.pr("I","Fetching Data For Scrip "+scrip,1)
+	#Determine output size full or compact
+	osize = detos(scrip)
+	data  = {}
+	API_LINK = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&interval=1min&apikey=MCAF9B429I44328U&symbol="+scrips[scrip]['search']+"&outputsize="+osize
+	c.pr("I","API Link -> "+API_LINK,1)	
+	r = req.get(API_LINK)
+	if(r.status_code == 200):
+		data = r.json()
+	else:
+		c.pr("I","Unable to Fetch Data HTTP STATUS CODE -> "+ r.status_code,0)
+	return data
+
+def detos(scrip):
+	osize = ""
+	st_dat   = datetime.today().strftime('%Y-%m-%d')
+	nw_dat   = datetime.today().strftime('%H:%M')
+	st_dat   = st_dat+' 09:00:15'
+	stqry    = "SELECT * FROM "+scrip+" WHERE `time` > '"+st_dat+"'"
+	dp_cnt   = s.rcnt(stqry)
+	dp_delta = datetime.strptime(nw_dat+":00",'%H:%M:%S') - datetime.strptime('09:15:00','%H:%M:%S')
+	dp_req   = int(dp_delta.seconds/60)
+	dp_mis   = int(dp_req - dp_cnt)
+	osize = ""
+	if dp_cnt == 0:
+		osize = "full"
+
+	if dp_mis > 100:
+		osize = "full"
+
+	if dp_mis < 100:
+		osize = "compact"
+	c.pr("I","Data Points Availiable -> "+str(dp_cnt) +" Data Points Required -> "+str(dp_req)+" Data Points Missing -> "+str(dp_mis)+" Output Size -> "+osize,1)
+	return osize
 
 def process_data(data,scrip):
 	#Check if meta data is returned
@@ -55,7 +92,7 @@ def process_data(data,scrip):
 		store_data(data_map,scrip)
 	else:
 		c.pr("I","Results Fetched Failed",1)
-	exit()	
+	#exit()	
 	return
 
 def store_data(data_map,scrip):
@@ -66,13 +103,13 @@ def store_data(data_map,scrip):
 	for key in final_map:
 		sql_ins = "('"+data_map[key]['D']+"','"+key+"',"+data_map[key]['O']+","+data_map[key]['L']+","+data_map[key]['H']+","+data_map[key]['C']+","+data_map[key]['V']+")"
 		sql_hash.append(sql_ins)
-	s.sql_insert(scrip,"time,timestamp,open,low,high,close,volume",sql_hash,20)
+	s.sql_insert(scrip,"time,timestamp,open,low,high,close,volume",sql_hash,10)
 	return 
 
 def sanitize(data_map,scrip):
 	c.pr("I","Sanitizing Data For "+scrip,1)
 	final_map = []
-	db_data   = s.sql_hash(scrip,"timestamp","volume")
+	db_data   = s.sql_hash("`"+scrip+"`","timestamp","volume")
 	for tk in data_map:
 		if tk not in db_data:
 			final_map.append(tk)
