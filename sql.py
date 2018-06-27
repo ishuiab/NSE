@@ -4,6 +4,21 @@ import common as c
 def sql_conn():
 	db = sql.connect("localhost","root","","stocki")
 	return db
+def sql_array(qry,key):
+    ret_arr = []
+    db_obj  = sql_conn()
+    cursor  = db_obj.cursor(sql.cursors.DictCursor)
+    try:
+        cursor.execute(qry)
+        results = cursor.fetchall()
+        for row in results:
+            if key in row:
+                ret_arr.append(row[key])
+    except (sql.Error, sql.Warning) as e:
+        print("-E- Query Failed")   
+        print(e)
+        db_obj.rollback()
+    return ret_arr
 
 def sql_insert(table,keys,data,limit):
     c.pr("I","Initiating Insert Operation On Table -> "+table+" Query Limit -> "+str(limit)+" Columns -> "+str(len(data)),0)
@@ -75,6 +90,21 @@ def execQuery(qry):
         print(e)
         db_obj.rollback() 
     return
+
+def sql_single(qry):
+    ret_str = ""
+    db_obj  = sql_conn()
+    cursor  = db_obj.cursor()
+    try:
+        cursor.execute(qry)
+        results = cursor.fetchall()
+        for row in results:
+            ret_str = row[0]
+    except (sql.Error, sql.Warning) as e:
+        print("-E- Query Failed")   
+        print(e)
+        db_obj.rollback()
+    return ret_str
 
 def create_table(name,schema):
     c.pr("I","Creating Table "+name,1)

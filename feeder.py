@@ -5,6 +5,7 @@ import json as js
 import time
 from pytz import timezone,utc
 from datetime import datetime,timedelta
+import sys
 
 #Load all the scrips first
 def load_scrips():
@@ -26,7 +27,25 @@ def clean_data(scrip):
 
 def fix_missing_entries(scrip):
 	c.pr("I","Fixing Missing Entries For Scrip "+scrip,1)
+	uniq_dates = s.sql_array("SELECT DISTINCT CAST(`time` AS DATE) AS dateonly FROM `"+scrip+"`","dateonly")
+	for date in uniq_dates:
+		dp_req = fetch_dp_req(str(date),scrip)
+		dp_cur = s.rcnt("SELECT * FROM `"+scrip+"` WHERE `time` BETWEEN '"+str(date)+" 09:15:00' AND '"+str(date)+" 15:30:00'")
+		dp_mis = (dp_req - dp_cur)
+		c.pr("I","DATE --> "+str(date)+" DP REQ --> "+str(dp_req)+" DP CUR --> "+str(dp_cur),1)
 	return
+
+def fetch_dp_req(date,scrip):
+	c.pr("I","Fetching Data Points Required For Scrip "+scrip+" On "+str(date) ,1)
+	dp_req 	 = 0
+	st_dat   = datetime.today().strftime('%Y-%m-%d')
+	if st_dat != date:
+		dp_req = 375
+	else:
+		dp_last  = s.sql_single("SELECT DATE_FORMAT(`time`, '%H:%i:%s') AS tme FROM `"+scrip+"` WHERE `time` > '"+date+" 09:15:00' ORDER BY `time` DESC LIMIT 1")
+		dp_delta = datetime.strptime(dp_last,'%H:%M:%S') - datetime.strptime('09:15:00','%H:%M:%S')
+		dp_req   = int(dp_delta.seconds/60)
+	return dp_req
 
 def fetch_data():
 	for scrip in scrips:
@@ -40,24 +59,30 @@ def fetch_json(scrip):
 	#Determine output size full or compact
 	osize = detos(scrip)
 	data  = {}
-	API_LINK = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&interval=1min&apikey=MCAF9B429I44328U&symbol="+scrips[scrip]['search']+"&outputsize="+osize
-	c.pr("I","API Link -> "+API_LINK,1)	
-	r = req.get(API_LINK)
-	if(r.status_code == 200):
-		data = r.json()
+	if osize != "NONE":
+		API_LINK = "https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&interval=1min&apikey=MCAF9B429I44328U&symbol="+scrips[scrip]['search']+"&outputsize="+osize
+		c.pr("I","API Link -> "+API_LINK,1)	
+		r = req.get(API_LINK)
+		if(r.status_code == 200):
+			data = r.json()
+		else:
+			c.pr("I","Unable to Fetch Data HTTP STATUS CODE -> "+ r.status_code,0)
 	else:
-		c.pr("I","Unable to Fetch Data HTTP STATUS CODE -> "+ r.status_code,0)
+		c.pr("I","No Need To Call API As Data Points Are Populated",1)
+		data['NONE'] = 1
 	return data
 
 def detos(scrip):
 	osize = ""
 	st_dat   = datetime.today().strftime('%Y-%m-%d')
 	nw_dat   = datetime.today().strftime('%H:%M')
-	st_dat   = st_dat+' 09:00:15'
-	stqry    = "SELECT * FROM "+scrip+" WHERE `time` > '"+st_dat+"'"
+	st_dat   = st_dat+' 09:15:00'
+	stqry    = "SELECT * FROM `"+scrip+"` WHERE `time` > '"+st_dat+"'"
 	dp_cnt   = s.rcnt(stqry)
 	dp_delta = datetime.strptime(nw_dat+":00",'%H:%M:%S') - datetime.strptime('09:15:00','%H:%M:%S')
 	dp_req   = int(dp_delta.seconds/60)
+	if dp_req > 375:
+		dp_req = 375
 	dp_mis   = int(dp_req - dp_cnt)
 	osize = ""
 	if dp_cnt == 0:
@@ -68,6 +93,10 @@ def detos(scrip):
 
 	if dp_mis < 100:
 		osize = "compact"
+
+	if dp_mis < 1:
+		osize = "NONE"
+
 	c.pr("I","Data Points Availiable -> "+str(dp_cnt) +" Data Points Required -> "+str(dp_req)+" Data Points Missing -> "+str(dp_mis)+" Output Size -> "+osize,1)
 	return osize
 
@@ -91,7 +120,9 @@ def process_data(data,scrip):
 			data_map[tstamp]['V'] = vlm
 		store_data(data_map,scrip)
 	else:
-		c.pr("I","Results Fetched Failed",1)
+		if not "NONE" in data:
+			c.pr("I","Results Fetched Failed",1)
+			print(data)
 	#exit()	
 	return
 
