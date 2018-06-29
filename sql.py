@@ -39,14 +39,13 @@ def sql_insert(table,keys,data,limit):
         execQuery(qry)
     return
 
-def sql_hash(table,key,cols):
+def sql_hash(table,key,cols,whr):
     query = ""
     ret   = {}
     vals  = cols.split(":")
     col   = key+","+",".join(vals)
-    query = "SELECT "+col+" FROM "+table
-    c.pr("S",query,1)
-
+    query = "SELECT "+col+" FROM `"+table+"` "+whr
+    #c.pr("S",query,1)
     db_obj  = sql_conn()
     cursor  = db_obj.cursor()
     try:
