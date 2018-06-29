@@ -4,7 +4,7 @@ import requests as req
 import json as js
 import time
 from pytz import timezone,utc
-from datetime import datetime,timedelta,time
+from datetime import datetime,timedelta
 import sys
 
 #Load all the scrips first
@@ -15,8 +15,8 @@ def load_scrips():
 	return
 
 def init():
-	#load_scrips()
-	#check_tables()
+	load_scrips()
+	check_tables()
 	load_scrips()
 	fetch_data()
 	return	
@@ -92,8 +92,8 @@ def fetch_dp_req(date,scrip):
 
 def fetch_data():
 	for scrip in scrips:
-		#data = fetch_json(scrip)
-		#process_data(data,scrip)
+		data = fetch_json(scrip)
+		process_data(data,scrip)
 		clean_data(scrip)
 	return
 
@@ -144,7 +144,6 @@ def detos(scrip):
 		osize = "NONE"
 
 	c.pr("I","Data Points Availiable -> "+str(dp_cnt) +" Data Points Required -> "+str(dp_req)+" Data Points Missing -> "+str(dp_mis)+" Output Size -> "+osize,1)
-	sys.exit()
 	return osize
 
 def process_data(data,scrip):
@@ -204,7 +203,9 @@ def fetch_param(ac_data):
 
 def fetch_time(time_key):
 	dt_obj = datetime.strptime(time_key, "%Y-%m-%d %H:%M:%S")
-	dt_ist = dt_obj.astimezone(timezone('Asia/Kolkata'))
+	ltz    = timezone('Asia/Kolkata')
+	dt_ist = ltz.localize(dt_obj)
+	#dt_ist = dt_obj.astimezone(timezone('Asia/Kolkata'))
 	tstamp = ""
 	if is_dst(dt_obj):
 		dt_ist = dt_ist + timedelta(hours=9,minutes=30)
