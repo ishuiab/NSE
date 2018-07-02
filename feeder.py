@@ -6,6 +6,7 @@ import time
 from pytz import timezone,utc
 from datetime import datetime,timedelta
 import sys
+import os.path
 
 #Load all the scrips first
 def load_scrips():
@@ -15,11 +16,52 @@ def load_scrips():
 	return
 
 def init():
+	#load_scrips()
+	#check_tables()
 	load_scrips()
-	check_tables()
-	load_scrips()
-	fetch_data()
+	fetch_local_data()
+	#fetch_data()
 	return	
+
+def fetch_local_data():
+	for scrip in scrips:
+		typs = {"EQ":scrip,"FUT":scrip+"_FUT"}
+		c.pr("I","Processing For scrip --> "+scrip,1)
+		for typ in typs:
+			data = fetch_csv(scrip,typ,"2018","JAN")
+			if(len(data)):
+				tbl = typs[typ]
+				s.sql_insert(tbl,"time,timestamp,open,low,high,close,volume",data,500)
+		sys.exit()
+	return
+
+def fetch_csv(scrip,typ,year,month):
+	sname = scrip
+	ret   = []
+	if typ == "FUT":
+		sname = sname + "_F1"
+	fpath = "C:\\Users\\ssadiq\\Downloads\\oneminutedata\\"+year+"\\"+month+"\\NIFTY50_"+month+year+"\\"+sname+".txt"
+	if os.path.exists(fpath):
+		c.pr("I","File Path Exists -> "+fpath,1)
+		fobj  = open(fpath,"r")
+		lines = (fobj.read()).split("\n")
+		for line in lines:
+			tmp_str  = line.split(",")
+			if len(tmp_str) == 8:
+				dt	   = tmp_str[1][:4] +"-"+tmp_str[1][4:6]+"-"+tmp_str[1][6:8]+" "+tmp_str[2]+":00"
+				o 	   = tmp_str[3]
+				h 	   = tmp_str[4]
+				l 	   = tmp_str[5]
+				cl 	   = tmp_str[6]
+				v      = tmp_str[7]
+				dt_obj = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+				tstamp = str(time.mktime(dt_obj.timetuple()))[:-2]
+				qry    = "('"+dt+"','"+tstamp+"',"+o+","+l+","+h+","+cl+","+v+")"
+				ret.append(qry)
+	else:
+		c.pr("W","File Path Does Not Exists -> "+fpath,1)
+	
+	return ret
 
 def clean_data(scrip):
 	c.pr("I","Performing Clean Up Opearations For Scrip "+scrip,1)
@@ -40,7 +82,7 @@ def fix_missing_entries(scrip):
 			#Here We attempt to fix DP
 			dp_min  = int(c.get_timestamp(str(date)+" 09:16:00"))
 			dp_max  = int(c.get_timestamp(str(date)+" 15:30:00"))
-			c.pr("I","DP MIN ---> "+str(dp_min)+"  DP MAX ---> "+str(dp_max),1)
+			#c.pr("I","DP MIN ---> "+str(dp_min)+"  DP MAX ---> "+str(dp_max),1)
 			dp_chk  = dp_min
 			ctr = 1
 			dp_last = 0
@@ -48,7 +90,7 @@ def fix_missing_entries(scrip):
 				if not str(dp_chk) in db_dp:
 					#If MIN AND CHK Are Same
 					if dp_chk == dp_min:
-						 print(str(dp_chk)+" ---> MIN MISSING")
+						 c.pr("I",str(dp_chk)+" ---> MIN MISSING",1)
 						 #exit()
 					else:
 						if str((dp_chk - 60)) in db_dp:
@@ -92,8 +134,8 @@ def fetch_dp_req(date,scrip):
 
 def fetch_data():
 	for scrip in scrips:
-		data = fetch_json(scrip)
-		process_data(data,scrip)
+		#data = fetch_json(scrip)
+		#process_data(data,scrip)
 		clean_data(scrip)
 	return
 
@@ -144,6 +186,7 @@ def detos(scrip):
 		osize = "NONE"
 
 	c.pr("I","Data Points Availiable -> "+str(dp_cnt) +" Data Points Required -> "+str(dp_req)+" Data Points Missing -> "+str(dp_mis)+" Output Size -> "+osize,1)
+	sys.exit()
 	return osize
 
 def process_data(data,scrip):
@@ -203,9 +246,7 @@ def fetch_param(ac_data):
 
 def fetch_time(time_key):
 	dt_obj = datetime.strptime(time_key, "%Y-%m-%d %H:%M:%S")
-	ltz    = timezone('Asia/Kolkata')
-	dt_ist = ltz.localize(dt_obj)
-	#dt_ist = dt_obj.astimezone(timezone('Asia/Kolkata'))
+	dt_ist = dt_obj.astimezone(timezone('Asia/Kolkata'))
 	tstamp = ""
 	if is_dst(dt_obj):
 		dt_ist = dt_ist + timedelta(hours=9,minutes=30)
@@ -215,6 +256,19 @@ def fetch_time(time_key):
 	tstamp = str(time.mktime(dt_ist.timetuple()))
 	tstamp = tstamp[:-2]
 	return dt_str,tstamp
+
+def get_table(file):
+	fname = file[:-4]
+	tname = ""
+	scrip = ""
+	if fname[-2:] == "F1":
+		scrip = fname[:-3]
+		tname = fname[:-3].lower()
+		tname = tname + "_FUT"
+	else:
+		scrip = fname
+		tname = fname.lower()
+	return scrip,tname
 
 def is_dst(tzdata):
     tz  = timezone('US/Eastern')
@@ -231,8 +285,26 @@ def check_tables():
 		else:
 			c.pr("I",scrip+" Table Needs To Be Created",1)
 			s.create_table(scrip,"time:DT,timestamp:VC:15,open:FL,low:FL,high:FL,close:FL,volume:IN")
+		
+		qry = "SELECT * FROM information_schema.tables WHERE table_schema = 'stocki'  AND table_name = '"+scrip+"_FUT' LIMIT 1;"
+		if s.rcnt(qry):
+			c.pr("I",scrip+"_FUT Table Exists",1)
+		else:
+			c.pr("I",scrip+"_FUT Table Needs To Be Created",1)
+			s.create_table(scrip+"_FUT","time:DT,timestamp:VC:15,open:FL,low:FL,high:FL,close:FL,volume:IN")
 	return
 #Script Flow Starts Here
 scrips 		= {}
+
 init()
 #Flow End Here.
+
+#files 		= c.fetch_files("C:\\Users\\ssadiq\\Downloads\\oneminutedata\\2018\\JAN\\NIFTY50_JAN2018\\NIFTY50_JAN2018")
+#for f in files:
+	#c.pr("I","Processing file "+f,1)
+#	scrip,tname = get_table(f)
+#	if tname[-3:] != "FUT":
+#		print(scrip+" <----> "+tname)
+#		qry = "INSERT INTO scrips VALUES ('"+scrip+"','NONE','YES','yes','"+scrip+"')"
+#		print(qry)
+#		s.execQuery(qry)
