@@ -28,16 +28,18 @@ def fetch_local_data():
 		typs = {"EQ":scrip,"FUT":scrip+"_FUT"}
 		c.pr("I","Processing For scrip --> "+scrip,1)
 		for typ in typs:
-			data = fetch_csv(scrip,typ,"2018","JAN")
-			if(len(data)):
-				tbl = typs[typ]
-				s.sql_insert(tbl,"time,timestamp,open,low,high,close,volume",data,500)
-		sys.exit()
+			months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
+			for mon in months:
+				data = fetch_csv(scrip,typ,"2017",mon)
+				if(len(data)):
+					tbl = typs[typ]
+					store_data(data,tbl)
+					clean_data(tbl)
 	return
 
 def fetch_csv(scrip,typ,year,month):
-	sname = scrip
-	ret   = []
+	sname 	   = scrip
+	data_map   = {}
 	if typ == "FUT":
 		sname = sname + "_F1"
 	fpath = "C:\\Users\\ssadiq\\Downloads\\oneminutedata\\"+year+"\\"+month+"\\NIFTY50_"+month+year+"\\"+sname+".txt"
@@ -56,12 +58,20 @@ def fetch_csv(scrip,typ,year,month):
 				v      = tmp_str[7]
 				dt_obj = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
 				tstamp = str(time.mktime(dt_obj.timetuple()))[:-2]
-				qry    = "('"+dt+"','"+tstamp+"',"+o+","+l+","+h+","+cl+","+v+")"
-				ret.append(qry)
+
+				data_map[tstamp]	  = {}
+				data_map[tstamp]['D'] = dt
+				data_map[tstamp]['O'] = o
+				data_map[tstamp]['L'] = l
+				data_map[tstamp]['H'] = h
+				data_map[tstamp]['C'] = cl
+				data_map[tstamp]['V'] = v
+				#qry    = "('"+dt+"','"+tstamp+"',"+o+","+l+","+h+","+cl+","+v+")"
+				#ret.append(qry)
 	else:
 		c.pr("W","File Path Does Not Exists -> "+fpath,1)
 	
-	return ret
+	return data_map
 
 def clean_data(scrip):
 	c.pr("I","Performing Clean Up Opearations For Scrip "+scrip,1)
@@ -99,8 +109,10 @@ def fix_missing_entries(scrip):
 							#print(str(dp_chk)+"  ---> PREV PRESENT"+" DP PREV ---> "+str(dp_prev))
 							dp_map[str(dp_chk)] = process_missing(dp_prev,dp_chk)
 						else:
-							dp_prev = db_dp[str(dp_last)]['close']
-							dp_map[str(dp_chk)] = process_missing(dp_prev,dp_chk)
+							#print(str(dp_chk)+"  ---> PREV MISSISNG"+" DP PREV ---> "+str(dp_last))
+							if dp_last:
+								dp_prev = db_dp[str(dp_last)]['close']
+								dp_map[str(dp_chk)] = process_missing(dp_prev,dp_chk)
 							#print(str(dp_chk)+"  ---> PREV MISSISNG"+" DP PREV ---> "+str(dp_prev))
 				else:
 					dp_last = dp_chk			
@@ -224,7 +236,7 @@ def store_data(data_map,scrip):
 	for key in final_map:
 		sql_ins = "('"+data_map[key]['D']+"','"+key+"',"+data_map[key]['O']+","+data_map[key]['L']+","+data_map[key]['H']+","+data_map[key]['C']+","+data_map[key]['V']+")"
 		sql_hash.append(sql_ins)
-	s.sql_insert(scrip,"time,timestamp,open,low,high,close,volume",sql_hash,100)
+	s.sql_insert(scrip,"time,timestamp,open,low,high,close,volume",sql_hash,500)
 	return 
 
 def sanitize(data_map,scrip):
@@ -295,7 +307,7 @@ def check_tables():
 	return
 #Script Flow Starts Here
 scrips 		= {}
-
+#clean_data("hdil_FUT")
 init()
 #Flow End Here.
 
