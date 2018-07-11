@@ -33,7 +33,7 @@ def fetch_local_data():
 				data = fetch_csv(scrip,typ,"2017",mon)
 				if(len(data)):
 					tbl = typs[typ]
-					store_data(data,tbl)
+					#store_data(data,tbl)
 					clean_data(tbl)
 	return
 
@@ -87,7 +87,7 @@ def fix_missing_entries(scrip):
 		dp_cur = len(db_dp)
 		dp_mis = (dp_req - dp_cur)
 		dp_map = {}
-		if dp_mis > 0:
+		if dp_mis > 1:
 			c.pr("I","DATE --> "+str(date)+" DP REQ --> "+str(dp_req)+" DP CUR --> "+str(dp_cur)+" DP MIS --> "+str(dp_mis),1)
 			#Here We attempt to fix DP
 			dp_min  = int(c.get_timestamp(str(date)+" 09:16:00"))
