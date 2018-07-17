@@ -14,8 +14,11 @@ def tester(strategy,capital,star_param):
 
 #Testing part
 star_param = {}
-star_param['MAX']     = 10 
+star_param['MAX']     = 15    #Maximum Data points to check 
 star_param['THR']     = 14 
 star_param['VAR']     = 0.001 #Maximum Variance in price
-star_param['START']   = 1527823800 #Starting Point June 1
-tester("ohl",10000,star_param)
+star_param['START']   = 1514777537 #Starting Point June 1
+star_param['SL']      = 0.0015 
+star_param['T1']      = 0.003
+star_param['T2']      = 0.004
+tester("ohl",150000,star_param)

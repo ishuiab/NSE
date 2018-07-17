@@ -4,6 +4,7 @@ import common as c
 def sql_conn():
 	db = sql.connect("localhost","root","","stocki")
 	return db
+
 def sql_array(qry,key):
     ret_arr = []
     db_obj  = sql_conn()
@@ -45,7 +46,7 @@ def sql_hash(table,key,cols,whr):
     vals  = cols.split(":")
     col   = key+","+",".join(vals)
     query = "SELECT "+col+" FROM `"+table+"` "+whr
-    c.pr("S",query,1)
+    #c.pr("S",query,1)
     db_obj  = sql_conn()
     cursor  = db_obj.cursor()
     try:

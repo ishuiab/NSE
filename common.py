@@ -28,12 +28,16 @@ def fetch_files(raw_path):
 def load_scrips():
 	scrips = {}
 	pr("I","Loading All Scrips",0)
-	scrips = s.sql_hash("scrips","scrip","sector:status:is_fetch:search","WHERE scrip='ASHOKLEY'")
+	scrips = s.sql_hash("scrips","scrip","sector:status:is_fetch:search","WHERE scrip LIKE 'BAJAJ%'")
 	return scrips
 
-def fetch_scrip_data(scrip,start):
+def fetch_scrip_data(scrip,start,end):
+	end_date = ""
+	if end:
+		end_date = " AND timestamp <= '"+end+"'"
+
 	pr("I","Fetching data for scrip "+scrip,1)
-	ret = s.sql_hash(scrip,"timestamp","open:low:high:close:volume","WHERE timestamp > '"+str(start)+"' ORDER BY timestamp")
+	ret = s.sql_hash(scrip,"timestamp","open:low:high:close:volume","WHERE timestamp >= '"+str(start)+"'"+end_date+" ORDER BY timestamp")
 	return ret
 
 def split_data(data,limit):
@@ -72,6 +76,12 @@ def get_time(timestamp):
         int(timestamp)
     ).strftime('%H:%M:%S')
 	return time
+
+def get_only_date(timestamp):
+	date = datetime.fromtimestamp(
+        int(timestamp)
+    ).strftime('%Y-%m-%d')
+	return date
 
 def intrafy(data):
 	ret   = {}
