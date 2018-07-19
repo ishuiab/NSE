@@ -19,10 +19,16 @@ def ohl(capital,star_param):
     sl     = star_param['SL']
     t1     = star_param['T1']
     t2     = star_param['T2']
+    st_id  = star_param['ID']
+    scr    = star_param['SC']
     sims   = {}
+    scrips = {}
     c.pr("I","Initialiazing Strategy OHL Max DP -> "+str(max_dp)+" Staring Data Point -> "+str(start),0)
     #Fetch Scrips
-    scrips = c.load_scrips()
+    if scr == "ALL":
+        scrips = c.load_scrips()
+    else:
+        scrips[scr] = 1
     #Fetch Data
     for scrip in scrips:
         data     = c.fetch_scrip_data(scrip,start,0)
@@ -30,7 +36,7 @@ def ohl(capital,star_param):
         for ctr in spl_data:
             rddata   = collections.OrderedDict(sorted(spl_data[ctr].items()))
             iddata   = c.intrafy(rddata)
-            sim_key,sim_data = ohl_process(iddata,thr,var,scrip,capital,max_dp,sl,t1,t2)
+            sim_key,sim_data = ohl_process(iddata,thr,var,scrip,capital,max_dp,sl,t1,t2,st_id)
             if sim_key:
                 sims[sim_key+"_"+scrip] = sim_data
                 #sim.simulate(sim_data)
@@ -38,16 +44,18 @@ def ohl(capital,star_param):
     
     #Call Simulations
     if len(sims):
-        c.pr("I",str(len(sims))+" Simulations Will Be Performed",1)
-        randomize(spl_data,sims,start,"09:31:00","03:10:00","OHL")
+        rans = randomize(spl_data,sims,start,"09:31:00","15:10:00","OHL",capital,sl,t1,t2,st_id)
+        c.pr("I",str(len(sims))+" Actual Simulations Will Be Performed",1)
+        c.pr("I",str(len(rans))+" Random Simulations Will Be Performed",1)
+      
         #for key in sims:
-            #print(sims[key])
-            #sim.simulate(sims[key])
+        #    print(sims[key]['TS'],sims[key]['ST'])
+        #    sim.simulate(sims[key])
             #exit()
-        #sim.init_sim(sims)
+        sim.init_sim(sims,rans,st_id)
     return
 
-def ohl_process(data,thr,var,scrip,capital,max_dp,sl,t1,t2):
+def ohl_process(data,thr,var,scrip,capital,max_dp,sl,t1,t2,st_id):
     #Here you have to identify O -> H or O -> L for first 15 mins with variance of 0.03% 
     keys     = list(data.keys())
     ctr      = 1
@@ -86,7 +94,8 @@ def ohl_process(data,thr,var,scrip,capital,max_dp,sl,t1,t2):
         sim_data['TS'] = sim_key
         sim_data['EN'] = "15:10:00"
         sim_data['NM'] = "OHL"
-        sim_data['TP'] = "ACT"
+        sim_data['ST'] = "ACT"
+        sim_data['ID'] = st_id
 
     #Check Open = LOW    
     ctr   = 1
@@ -118,19 +127,24 @@ def ohl_process(data,thr,var,scrip,capital,max_dp,sl,t1,t2):
         sim_data['TS'] = sim_key
         sim_data['EN'] = "15:10:00"
         sim_data['NM'] = "OHL"
-        sim_data['TP'] = "ACT"
+        sim_data['ST'] = "ACT"
+        sim_data['ID'] = st_id
     return sim_key,sim_data
 
-def randomize(data,sim_data,start,st,en,star):
-    uniq_scrip = {}
-    ran_data   = {}
+def randomize(data,sim_data,start,st,en,star,capital,sl,t1,t2,st_id):
+    uniq_scrip  = {}
+    trans_order = {}
+    ran_data    = {}
+    random.seed(100)
     #print(sim_data)
     for sim in sim_data:
         #Seperate data as per Scrips
         scrip = sim_data[sim]['SC']
         if scrip not in uniq_scrip:
-            uniq_scrip[scrip] = {}
+            uniq_scrip[scrip]  = {}
+            trans_order[scrip] = []
         uniq_scrip[scrip][sim_data[sim]['TS']] = sim_data[sim]
+        trans_order[scrip].append(uniq_scrip[scrip][sim_data[sim]['TS']]['TP'] )
     
     for scrip in uniq_scrip:
         data     = c.fetch_scrip_data(scrip,start,0)
@@ -143,7 +157,6 @@ def randomize(data,sim_data,start,st,en,star):
         c.pr("I","Generating Random Data For Scrip -> "+scrip+" DP Needed -> "+str(max_dp)+" DP Available -> "+str(dp_avl),1)
         ctr = 0
         for x in range(1,max_dp+1):
-            ctr += 1
             y = True
             while y:
                 #Generate Random number
@@ -156,12 +169,17 @@ def randomize(data,sim_data,start,st,en,star):
                 if dp_check not in sim_data:
                     if dp_check not in ran_data:
                         ran_data[dp_check] = {}
-                        ran_data['NM']     = tkey
-                        ran_data['NM']     = star
-                        ran_data['TP']     = "RAN"
-                        ran_data['EN']     = en
-                        ran_data['SC']     = en
+                        ran_data[dp_check]['TS']     = tkey
+                        ran_data[dp_check]['NM']     = star
+                        ran_data[dp_check]['ST']     = "RAN"
+                        ran_data[dp_check]['EN']     = en
+                        ran_data[dp_check]['SC']     = scrip
+                        ran_data[dp_check]['TP']     = trans_order[scrip][ctr]
+                        ran_data[dp_check]['CP']     = capital
+                        ran_data[dp_check]['SL']     = sl 
+                        ran_data[dp_check]['T1']     = t1
+                        ran_data[dp_check]['T2']     = t2
+                        ran_data[dp_check]['ID']     = st_id
+                        ctr                         += 1
                         y = False
-        print(len(ran_data))
-        exit()
-    return
+    return ran_data

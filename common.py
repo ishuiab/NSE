@@ -2,6 +2,8 @@ from datetime import datetime,timedelta
 import time
 import collections
 import sql as s
+import secrets
+import string
 dbg_sw  	= 1   
 
 def pr(typ,msg,dbg):
@@ -28,7 +30,7 @@ def fetch_files(raw_path):
 def load_scrips():
 	scrips = {}
 	pr("I","Loading All Scrips",0)
-	scrips = s.sql_hash("scrips","scrip","sector:status:is_fetch:search","WHERE scrip LIKE 'BAJAJ%'")
+	scrips = s.sql_hash("scrips","scrip","sector:status:is_fetch:search","WHERE scrip LIKE 'BA%'")
 	return scrips
 
 def fetch_scrip_data(scrip,start,end):
@@ -96,3 +98,28 @@ def intrafy(data):
 			ret[k] = data[k]
 			#print(str(tm)+" <--------> "+k)
 	return ret
+
+#Function to generate 8 digit unique and randon ID
+def gen_id(table,col_name):
+    ran_id = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+    if s.rcnt("SELECT * FROM "+table+" WHERE "+col_name+"='"+ran_id+"'"):
+       gen_id() 
+    return ran_id
+
+def dump(obj):
+	if type(obj) == dict:
+		for k, v in obj.items():
+			if hasattr(v, '__iter__'):
+				print(k)
+				dump(v)
+			else:
+				print('%s : %s' % (k, v))
+	elif type(obj) == list:
+		for v in obj:
+			if hasattr(v, '__iter__'):
+				dump(v)
+			else:
+				print(k)
+	else:
+		print(obj)
+	return

@@ -60,7 +60,7 @@ def sql_hash(table,key,cols,whr):
                 ret[k][cl] = row[ct]
                 ct = ct + 1 
     except (sql.Error, sql.Warning) as e:
-        print("-E- Query Failed")   
+        print("-E- Query Failed -> "+query)   
         print(e)
         db_obj.rollback()
     return ret

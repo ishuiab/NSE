@@ -1,4 +1,5 @@
 import sql as s
+import pymysql  as sql
 import common as c
 import threading
 import time
@@ -6,14 +7,15 @@ import collections
 import math
 import secrets
 import string
+import os
 from queue import Queue
 
 q = Queue()
 print_lock = threading.Lock()
 
-def init_sim(sims):
+def init_sim(sims,rans,st_id):
     c.pr("I","Initializing Simulation",0)
-    max_threads = 10
+    max_threads = 20
     if len(sims) < max_threads:
         max_threads = len(sims)
 
@@ -25,8 +27,172 @@ def init_sim(sims):
     for key in sims:
         q.put(sims[key])
     
+    for key in rans:
+        q.put(rans[key])
+
     q.join()
     c.pr("I","Simulation Finished",1)
+    os.system('cls')
+    display_stats(st_id)
+    return
+
+def display_stats(st_id):
+    #Step 1 Get the list of stocks traded with strategy
+    sim_data    = s.sql_hash("sim_tracker","sim_id","scrip:capital:type:transaction:capital","WHERE strategy_id='"+st_id+"' ORDER BY transaction")
+    sim_ids     = list(sim_data.keys())
+    sim_ids_str = str(sim_ids).replace("[","(").replace("]",")")
+    sim_map     = {}
+    query       = "SELECT * FROM sim_results WHERE sim_id IN "+sim_ids_str
+    res_map     = {}
+    sum_map     = {}
+    db_obj      = s.sql_conn()
+    cursor      = db_obj.cursor()
+    try:
+        cursor.execute(query)
+        results = cursor.fetchall()
+        for row in results: 
+            if row[0] not in sum_map:
+                sum_map[row[0]] = {}
+                sum_map[row[0]]['SC']  = sim_data[row[0]]['scrip']
+                sum_map[row[0]]['TR']  = sim_data[row[0]]['transaction']
+                sum_map[row[0]]['ST']  = sim_data[row[0]]['type']
+                sum_map[row[0]]['EP']  = "9999999999" #MIN OF ALL DP
+                sum_map[row[0]]['XP']  = "0" #MAX OF ALL DP
+                sum_map[row[0]]['T1H'] = {}
+                sum_map[row[0]]['T1H']['EP'] = 0
+                sum_map[row[0]]['T1H']['XP'] = 0
+                sum_map[row[0]]['T1H']['VL'] = 0
+                sum_map[row[0]]['T2H'] = {}
+                sum_map[row[0]]['T2H']['EP'] = 0
+                sum_map[row[0]]['T2H']['XP'] = 0
+                sum_map[row[0]]['T2H']['VL'] = 0
+                sum_map[row[0]]['SLH'] = {}
+                sum_map[row[0]]['SLH']['EP'] = 0
+                sum_map[row[0]]['SLH']['XP'] = 0
+                sum_map[row[0]]['SLH']['VL'] = 0
+                sum_map[row[0]]['SQF'] = {}
+                sum_map[row[0]]['SQF']['EP'] = 0
+                sum_map[row[0]]['SQF']['XP'] = 0
+                sum_map[row[0]]['SQF']['VL'] = 0
+                sum_map[row[0]]['PL']  = 0
+                sum_map[row[0]]['VL']  = 0
+
+            if int(sum_map[row[0]]['EP']) > int(row[1]):
+                sum_map[row[0]]['EP'] = row[1]
+            if int(sum_map[row[0]]['XP']) < int(row[2]):
+                sum_map[row[0]]['XP'] = row[2]
+
+            sum_map[row[0]]['PL']  += row[6]
+            sum_map[row[0]]['VL']  += row[5]
+
+            sum_map[row[0]][row[7]]['EP'] = row[3]
+            sum_map[row[0]][row[7]]['XP'] = row[4]
+            sum_map[row[0]][row[7]]['VL'] = row[5]
+
+            if row[0] not in sim_map:
+                sim_map[row[0]] = {}
+
+            if row[7] not in sim_map[row[0]]:       
+                sim_map[row[0]][row[7]] = {}
+            sim_map[row[0]][row[7]]['EN'] = row[1]
+            sim_map[row[0]][row[7]]['XT'] = row[2]
+            sim_map[row[0]][row[7]]['EP'] = row[3]
+            sim_map[row[0]][row[7]]['XP'] = row[4]
+            sim_map[row[0]][row[7]]['VL'] = row[5]
+            sim_map[row[0]][row[7]]['PL'] = row[6]
+    except (sql.Error, sql.Warning) as e:
+        print("-E- Query Failed")   
+        print(e)
+        db_obj.rollback()   
+    for sim_id in sim_data:
+        scrip   = sim_data[sim_id]['scrip']
+        capital = sim_data[sim_id]['capital']
+        stype   = sim_data[sim_id]['type']
+        trans   = sim_data[sim_id]['transaction']
+        if scrip not in res_map:
+            res_map[scrip]        = {}
+            res_map[scrip]['ACT'] = {}
+            res_map[scrip]['RAN'] = {}
+        
+        if trans not in res_map[scrip][stype]:
+            res_map[scrip][stype][trans] = {}
+            res_map[scrip][stype][trans]['CP'] = 0
+            res_map[scrip][stype][trans]['TD'] = 0
+            res_map[scrip][stype][trans]['SR'] = 0
+            res_map[scrip][stype][trans]['PL'] = 0
+            res_map[scrip][stype][trans]['WN'] = 0
+            res_map[scrip][stype][trans]['LS'] = 0
+    
+        res_map[scrip][stype][trans]['CP']  = capital
+        res_map[scrip][stype][trans]['TD'] += 1
+        trade_stat = 0
+        for ts in sim_map[sim_id]:
+            res_map[scrip][stype][trans]['PL'] += sim_map[sim_id][ts]['PL']
+            if sim_map[sim_id][ts]['PL'] > 0:
+                trade_stat += 1
+            else:
+                trade_stat -= 1    
+        if trade_stat > 0:
+            res_map[scrip][stype][trans]['WN'] += 1
+        else:
+            res_map[scrip][stype][trans]['LS'] += 1
+        
+        res_map[scrip][stype][trans]['SR'] = round((res_map[scrip][stype][trans]['WN']/res_map[scrip][stype][trans]['TD']) * 100,2)
+    print("----------------------------------------------------------------------------------------------------------------------------------------")
+    print("|                                                             Simulation Summary                                                       |")
+    print("----------------------------------------------------------------------------------------------------------------------------------------")
+    print("|        Scrip        | Simulation |  Transaction  |   Capital  |   Sims  |  Wins   | Losses |  Success % |     P/L    |  Exit Capital |")
+    print("----------------------------------------------------------------------------------------------------------------------------------------")
+
+    for scrip in res_map.keys():
+        for sim in res_map[scrip].keys():
+            for trans in res_map[scrip][sim].keys():
+                #print(trans)
+                #c.dump(res_map[scrip][sim])
+                msg = "|"+gs(scrip,21)+"|"+gs(sim,12)+"|"+gs(trans,15)+"|"+gs(str(res_map[scrip][sim][trans]['CP']),12)+"|"
+                msg = msg+gs(str(res_map[scrip][sim][trans]['TD']),9)+"|"+gs(str(res_map[scrip][sim][trans]['WN']),9)+"|"
+                msg = msg+gs(str(res_map[scrip][sim][trans]['LS']),8)+"|"+gs(str(res_map[scrip][sim][trans]['SR'])+"%",12)+"|"
+                msg = msg+gs(str(round(res_map[scrip][sim][trans]['PL'],3)),12)+"|"
+                msg = msg+gs(str(round(res_map[scrip][sim][trans]['PL'] + res_map[scrip][sim][trans]['CP'],2)),15)+"|"
+                print(msg)
+            #break
+    print("----------------------------------------------------------------------------------------------------------------------------------------")
+    
+    print("\n--------------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|                                                                    Detailed Summary Actual                                                           |")
+    print("--------------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|   Scrip   |    Date    | Entry |  Exit  | Trans | Vlm |         T1         |         T2         |         SL         |         SQ         |    P/L   |")
+    print("--------------------------------------------------------------------------------------------------------------------------------------------------------")
+    #c.dump(sum_map)
+    STC = ['T1H','T2H','SLH','SQF']
+    ranmsg = ""
+    for sim in sum_map:
+        msg  = "|"+gs(sum_map[sim]['SC'],11)+"|"
+        msg +=  gs(c.get_date(sum_map[sim]['EP'])[0:10],12)+"|"
+        msg +=  gs(c.get_date(sum_map[sim]['EP'])[11:-3],7)+"|"
+        msg +=  gs(c.get_date(sum_map[sim]['XP'])[11:-3],8)+"|"
+        msg +=  gs(sum_map[sim]['TR'],7)+"|"
+        msg +=  gs(str(sum_map[sim]['VL']),5)+"|"
+        for ST in STC:
+            if sum_map[sim][ST]['VL']:
+                tst  = str(sum_map[sim][ST]['VL'])+" "+str(sum_map[sim][ST]['EP'])+" "+str(sum_map[sim][ST]['XP'])
+                msg += gs(tst,20)+"|"
+            else:   
+                msg +=  gs("NONE",20)+"|"
+        msg +=  gs(str(sum_map[sim]['PL']),10)+"|"
+        if sum_map[sim]['ST'] == "ACT":
+            print(msg)
+        else:    
+            ranmsg += msg+"\n"
+    print("--------------------------------------------------------------------------------------------------------------------------------------------------------")
+    
+    print("\n--------------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|                                                                   Random Walk Summary Actual                                                         |")
+    print("--------------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|   Scrip   |    Date    | Entry |  Exit  | Trans | Vlm |         T1         |         T2         |         SL         |         SQ         |    P/L   |")
+    print("--------------------------------------------------------------------------------------------------------------------------------------------------------")
+    print(ranmsg[0:-1])
+    print("--------------------------------------------------------------------------------------------------------------------------------------------------------")
     return
 
 def threader():
@@ -48,6 +214,8 @@ def simulate(sim_data):
     start    = sim_data['TS']
     end_time = sim_data['EN']
     sim_name = sim_data['NM']
+    sim_type = sim_data['ST']
+    str_id   = sim_data['ID']
     sl_val  = 0
     t1_val  = 0
     t2_val  = 0
@@ -58,10 +226,9 @@ def simulate(sim_data):
     entry   = 0
     status  = ""
     end     = c.get_timestamp(c.get_only_date(start)+" "+end_time)
-    sim_id  = gen_id()
+    sim_id  = c.gen_id("sim_tracker","sim_id")
     
-    
-    c.pr("I","Starting simulation for [SIM ID -> "+sim_id+"] [Scrip -> "+scrip +"] [Transaction -> "+trans+"] [Entry Point ->  "+c.get_date(start)+"] [Capital -> "+str(capt)+"] [T1 -> "+str(tar1)+"%] [T2 -> "+str(tar2)+"%] [SL -> "+str(sl)+"%]",1)
+    c.pr("I","Starting simulation for [SIM ID -> "+sim_id+"] [Scrip -> "+scrip +"] [Type -> "+sim_type+"] [Transaction -> "+trans+"] [Entry Point ->  "+c.get_date(start)+"] [Capital -> "+str(capt)+"] [T1 -> "+str(tar1)+"%] [T2 -> "+str(tar2)+"%] [SL -> "+str(sl)+"%]",1)
     #Step 1 Load the Scrip
     data  = c.fetch_scrip_data(scrip,start,end)
     tkeys = list(data.keys())
@@ -90,7 +257,7 @@ def simulate(sim_data):
     t2_vol = vol - t1_vol
     
     #Step 4.1 Record the simulation data in DB
-    sim_query = "INSERT INTO sim_tracker VALUES ('"+sim_id+"','"+sim_name+"','"+scrip+"','"+trans+"',"+str(capt)+","+str(tar1)+","+str(tar2)+","+str(sl)+","+str(t1_vol)+","+str(t2_vol)+",'"+start+"','"+end+"')"
+    sim_query = "INSERT INTO sim_tracker VALUES ('"+sim_id+"','"+str_id+"','"+scrip+"','"+sim_type+"','"+trans+"',"+str(capt)+","+str(tar1)+","+str(tar2)+","+str(sl)+","+str(t1_vol)+","+str(t2_vol)+",'"+start+"','"+end+"')"
     s.execQuery(sim_query)
 
     #c.pr("I","First Candle [Open "+str(ep_data['open'])+"] [Low "+str(ep_data['low'])+"] [High "+str(ep_data['high'])+"] [Close "+str(ep_data['close'])+"]",1)
@@ -211,9 +378,17 @@ def simulate(sim_data):
         s.execQuery(res_query)
     c.pr("I","--------------------------------------------------------",1)
     return
-#Function to generate 8 digit unique and randon ID
-def gen_id():
-    ran_id = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
-    if s.rcnt("SELECT * FROM sim_tracker WHERE sim_id='"+ran_id+"'"):
-       gen_id() 
-    return ran_id
+
+def gs(val,num):
+    ret = val
+    lim = (num-len(val))
+    x   = 0
+    while lim:
+        if x:
+            ret = ret+" "
+            x   =0
+        else:
+            ret = " "+ret
+            x   = 1 
+        lim -= 1 
+    return ret
