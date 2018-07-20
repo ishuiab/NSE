@@ -106,20 +106,25 @@ def gen_id(table,col_name):
        gen_id() 
     return ran_id
 
-def dump(obj):
+def dump(obj,spc):
 	if type(obj) == dict:
 		for k, v in obj.items():
 			if hasattr(v, '__iter__'):
-				print(k)
-				dump(v)
+				print(spc,k)
+				spc += " "
+				dump(v,spc)
 			else:
-				print('%s : %s' % (k, v))
+				#spc += " "
+				print(spc,'%s : %s' % (k, v))
 	elif type(obj) == list:
 		for v in obj:
 			if hasattr(v, '__iter__'):
-				dump(v)
+				spc += " "
+				dump(v,spc)
 			else:
-				print(k)
+				print(spc,k)
+				spc += " "
 	else:
-		print(obj)
+		spc += " "
+		print(spc,obj)
 	return

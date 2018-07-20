@@ -58,32 +58,31 @@ def ohl(capital,star_param):
 def ohl_process(data,thr,var,scrip,capital,max_dp,sl,t1,t2,st_id):
     #Here you have to identify O -> H or O -> L for first 15 mins with variance of 0.03% 
     keys     = list(data.keys())
-    ctr      = 1
-    cthr     = 0
     opn      = data[keys[0]]['open']
     hig      = data[keys[0]]['high']
     low      = data[keys[0]]['low']
-    topn     = round(opn + (opn * var),1)
-    bopn     = round(opn - (opn * var),1)
+    avg_opn  = ((opn+hig+low)/3)
+    avg_opn  = opn    
+    topn     = round(avg_opn + (avg_opn * var),1)
+    bopn     = round(avg_opn - (avg_opn * var),1)
     sim_data = {}
     ran_data = {}
     sim_key  = 0
+
     #Check if open = High
+    ctr      = 1
+    cthr     = 0
     while ctr != max_dp:
         time = c.get_date(keys[ctr])
         copn = data[keys[ctr]]['open']
         chig = data[keys[ctr]]['high']
         clow = data[keys[ctr]]['low']
-        if  bopn > chig:
-            #c.pr("I","YES "+str(ctr)+"  Open -> "+str(opn)+"  Current High -> "+str(chig),1)
+        cavg = ((copn+chig+clow)/3)
+        if  bopn > cavg:
             cthr = cthr + 1 
-        #else:
-            #c.pr("I","NO "+str(ctr)+"  Open -> "+str(opn)+"  Current High -> "+str(chig),1)
         ctr = ctr + 1
-    
+
     if cthr >= thr:
-        #c.pr("I","Date "+c.get_date(keys[0])+"   Open -> "+str(opn)+"  T Range -> "+str(topn)+"  B Range -> "+str(bopn)+"  High -> "+str(hig)+"  Low -> "+str(low),1)
-        #c.pr("I","Threshold ---> "+str(thr)+" Current Result ---> "+str(cthr)+" Analysis --> OPEN = HIGH",1)
         sim_key        = keys[ctr]
         sim_data['SC'] = scrip
         sim_data['TP'] = "SELL"
@@ -100,23 +99,18 @@ def ohl_process(data,thr,var,scrip,capital,max_dp,sl,t1,t2,st_id):
     #Check Open = LOW    
     ctr   = 1
     cthr  = 0
+
     while ctr != max_dp:
         time = c.get_date(keys[ctr])
         copn = data[keys[ctr]]['open']
         chig = data[keys[ctr]]['high']
         clow = data[keys[ctr]]['low']
-        if  topn < clow:
-            #c.pr("I","YES "+str(ctr)+"  Open -> "+str(opn)+"  Current High -> "+str(chig),1)
+        cavg = ((copn+chig+clow)/3)
+        if  topn < cavg:
             cthr = cthr + 1 
-        #else:
-            #c.pr("I","NO "+str(ctr)+"  Open -> "+str(opn)+"  Current High -> "+str(chig),1)
         ctr = ctr + 1    
-    #else:
-    #    c.pr("I","Threshold ---> "+str(thr)+" Current Result ---> "+str(cthr)+" Analysis --> OPEN != HIGH",1)    
-    #print(cthr)
+
     if cthr >= thr:
-        #c.pr("I","Date "+c.get_date(keys[0])+"   Open -> "+str(opn)+"  T Range -> "+str(topn)+"  B Range -> "+str(bopn)+"  High -> "+str(hig)+"  Low -> "+str(low),1)
-        #c.pr("I","Threshold ---> "+str(thr)+" Current Result ---> "+str(cthr)+" Analysis --> OPEN = LOW",1)
         sim_key        = keys[ctr]
         sim_data['SC'] = scrip
         sim_data['TP'] = "BUY"

@@ -3,44 +3,30 @@ import common as c
 import sys
 import time
 import simulation as sim
+import threading
 import numpy as np
 from strategy import ohl
 from datetime import datetime,timedelta
 from pytz import timezone,utc
 
-
 def tester(strategy,capital,star_param,bulk_id):
     star_id = c.gen_id("strategy","strategy_id")
     c.pr("I","Testing Strategy "+strategy.upper()+" with capital "+str(capital)+" Strategy ID -> "+star_id,1)
-    s.execQuery("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star_param).replace("'","''")+"')")
     star_param['ID'] = star_id
+    s.execQuery("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star_param).replace("'","''")+"')")
     eval(strategy)(capital,star_param)
     return
-
-#Testing part
-
-star_param = {}
-star_param['MAX']     = 15    #Maximum Data points to check 
-star_param['THR']     = 14 
-star_param['VAR']     = 0.001 #Maximum Variance in price
-star_param['START']   = 151477753 #Starting Point June 1
-star_param['SL']      = 0.004
-star_param['T1']      = 0.008
-star_param['T2']      = 0.010
-star_param['SC']      = "NIFTY"
-#print(c.fetch_scrip_data("NIFTY","1518148860","1518126000"))
-#tester("ohl",150000,star_param,"NULL")
-#sim.display_stats("QTJE0UFK")
 
 def bulk_test():
     #OHL Bulk Test
     #Variance Range between 0.001 to 0.003
-    var_range = np.arange(0.001,0.004,0.001)
-    sl_range  = np.arange(0.002,0.006,0.001)
-    t1_range  = np.arange(0.004,0.010,0.001)
-    t2_range  = np.arange(0.006,0.012,0.001)
-    md_range  = range(10,20)
+    var_range = np.arange(0.002,0.004,0.001)
+    sl_range  = np.arange(0.002,0.004,0.001)
+    t1_range  = np.arange(0.004,0.008,0.001)
+    t2_range  = np.arange(0.008,0.010,0.001)
+    md_range  = range(15,20)
     ctr       = 0
+    bulk_id   = c.gen_id("strategy","bulk_id")
     for var in var_range:
         var = round(var,3)
         for sl in sl_range:
@@ -58,8 +44,97 @@ def bulk_test():
                         star_param['T1']      = t1
                         star_param['T2']      = t2
                         star_param['SC']      = "NIFTY"
+                        tester("ohl",150000,star_param,bulk_id)
                         ctr = ctr + 1
+                        
     print(str(ctr))
     return
 
-bulk_test()
+def bulk_stats(bulk_id):
+    uniq_strategy = s.sql_hash("strategy","strategy_id","params","WHERE bulk_id='"+bulk_id+"'")
+    c.pr("I",str(len(uniq_strategy))+" Unique Parameters Identified",1)
+    sim_map        = {}
+    best           = {}
+    best['WIN']    = {}
+    #best['PROFIT'] = {}
+
+    best['WIN']['BUY']  = {}
+    best['WIN']['SELL'] = {}
+
+    #best['PROFIT']['BUY']  = {}
+    #best['PROFIT']['SELL'] = {}
+
+    for ustar in uniq_strategy:
+        uniq_sims = s.sql_hash("sim_tracker","sim_id","type:scrip:transaction:capital:start_time:end_time","WHERE strategy_id='"+ustar+"'")
+        #c.pr("I",str(len(uniq_sims))+" Unique Simulations Were Performed For Strategy "+ustar,1)
+        sim_ids             = list(uniq_sims.keys())
+        sim_ids_str         = str(sim_ids).replace("[","(").replace("]",")")
+        
+        sim_map[ustar]      = {}
+        sim_map[ustar]['R'] = {}
+        typ = ['BUY','SELL']
+        sts = ['W','L','P','WP','T']
+        trn = ['RAN','ACT']
+
+        for tp in typ:
+            sim_map[ustar][tp] = {}
+            for st in sts:
+                sim_map[ustar][tp][st] = {}
+                for tr in trn:
+                    sim_map[ustar][tp][st][tr] = 0
+
+        sim_res             = s.sql_hash("sim_results","sim_id","SUM(result)","WHERE sim_id IN "+sim_ids_str+" GROUP BY sim_id")
+
+        for sim in sim_res:
+            trn = uniq_sims[sim]['transaction']
+            typ = uniq_sims[sim]['type']
+            res = sim_res[sim]['SUM(result)']
+
+            sim_map[ustar]['R'][sim]            = {}
+            sim_map[ustar]['R'][sim]['TR']      = trn
+            sim_map[ustar]['R'][sim]['TP']      = typ
+            sim_map[ustar]['R'][sim]['PL']      = res
+
+            sim_map[ustar][trn]['P'][typ]       += res
+            sim_map[ustar][trn]['T'][typ]       += 1
+            if res > 0:
+                sim_map[ustar][trn]['W'][typ]   += 1
+            else:   
+                sim_map[ustar][trn]['L'][typ]   += 1   
+
+        win = round(((sim_map[ustar]['SELL']['W']['ACT']/sim_map[ustar]['SELL']['T']['ACT'])*100),2)
+        sim_map[ustar]['SELL']['WP']['ACT'] = win
+        win = round(((sim_map[ustar]['SELL']['W']['RAN']/sim_map[ustar]['SELL']['T']['RAN'])*100),2)
+        sim_map[ustar]['SELL']['WP']['RAN']  = win
+
+        win = round(((sim_map[ustar]['BUY']['W']['ACT']/sim_map[ustar]['BUY']['T']['ACT'])*100),2)
+        sim_map[ustar]['BUY']['WP']['ACT'] = win
+        win = round(((sim_map[ustar]['BUY']['W']['RAN']/sim_map[ustar]['BUY']['T']['RAN'])*100),2)
+        sim_map[ustar]['BUY']['WP']['RAN']  = win
+
+        #Identify the best strategy by % and profit
+        if len(best['WIN']['SELL']) < 10:
+            best['WIN']['SELL'][ustar] = sim_map[ustar]['SELL']['WP']['ACT']
+            
+        if len(best['WIN']['BUY']) < 10:
+            best['WIN']['BUY'][ustar] = sim_map[ustar]['BUY']['WP']['ACT']
+
+    c.dump(best,"")
+
+    return
+#Testing part
+
+star_param = {}
+star_param['MAX']     = 15    #Maximum Data points to check 
+star_param['THR']     = 14 
+star_param['VAR']     = 0.001 #Maximum Variance in price
+star_param['START']   = 151477753 #Starting Point June 1
+star_param['SL']      = 0.004
+star_param['T1']      = 0.008
+star_param['T2']      = 0.010
+star_param['SC']      = "NIFTY"
+#print(c.fetch_scrip_data("NIFTY","1518148860","1518126000"))
+#tester("ohl",150000,star_param,"NULL")
+#sim.display_stats("QTJE0UFK")
+#bulk_test()
+bulk_stats("RQN51G2H")
