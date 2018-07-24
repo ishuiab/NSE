@@ -2,6 +2,7 @@ import sql as s
 import common as c
 import collections
 import random
+import time
 import simulation as sim
 from datetime import datetime,timedelta
 from pytz import timezone,utc
@@ -51,6 +52,12 @@ def ohl(capital,star_param):
         #for key in sims:
         #    print(sims[key]['TS'],sims[key]['ST'])
         #    sim.simulate(sims[key])
+        #for key in rans:
+        #    print(rans[key]['TS'],rans[key]['ST'])
+        #    sim.simulate(rans[key])
+        
+        #sim.display_stats(st_id)
+        #time.sleep(10)
             #exit()
         sim.init_sim(sims,rans,st_id)
     return

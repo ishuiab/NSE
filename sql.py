@@ -19,6 +19,7 @@ def sql_array(qry,key):
         print("-E- Query Failed")   
         print(e)
         db_obj.rollback()
+    cursor.close()
     return ret_arr
 
 def sql_insert(table,keys,data,limit):
@@ -38,6 +39,9 @@ def sql_insert(table,keys,data,limit):
         dap = dap[1:]
         qry = "INSERT INTO `"+table+"` ("+keys+") VALUES "+dap
         execQuery(qry)
+    cursor.close()
+    del cursor
+    db_obj.close()
     return
 
 def sql_hash(table,key,cols,whr):
@@ -63,6 +67,9 @@ def sql_hash(table,key,cols,whr):
         print("-E- Query Failed -> "+query)   
         print(e)
         db_obj.rollback()
+    cursor.close()
+    del cursor
+    db_obj.close()
     return ret
 
 def rcnt(qry):
@@ -76,6 +83,9 @@ def rcnt(qry):
         print("-E- Query Failed")   
         print(e)
         db_obj.rollback()
+    cursor.close()
+    del cursor
+    db_obj.close()
     return rows
 
 def execQuery(qry):
@@ -89,6 +99,9 @@ def execQuery(qry):
         print("-E- Query Failed")   
         print(e)
         db_obj.rollback() 
+    cursor.close()
+    del cursor
+    db_obj.close()
     return
 
 def sql_single(qry):
@@ -104,6 +117,9 @@ def sql_single(qry):
         print("-E- Query Failed")   
         print(e)
         db_obj.rollback()
+    cursor.close()
+    del cursor
+    db_obj.close()
     return ret_str
 
 def create_table(name,schema):
@@ -129,4 +145,7 @@ def create_table(name,schema):
         execQuery("UPDATE scrips SET status='YES' WHERE scrip='"+name+"'")
     else:
         c.pr("W",str(name+" Table Not Created"),1)
+    cursor.close()
+    del cursor
+    db_obj.close()
     return

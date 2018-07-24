@@ -15,7 +15,7 @@ print_lock = threading.Lock()
 
 def init_sim(sims,rans,st_id):
     c.pr("I","Initializing Simulation",0)
-    max_threads = 20
+    max_threads = 5
     if len(sims) < max_threads:
         max_threads = len(sims)
 
@@ -32,7 +32,7 @@ def init_sim(sims,rans,st_id):
 
     q.join()
     c.pr("I","Simulation Finished",1)
-    os.system('cls')
+    #os.system('cls')
     display_stats(st_id)
     return
 
@@ -201,6 +201,9 @@ def display_stats(st_id):
     print(ranmsg[0:-1])
     print(sel_ran[0:-1])
     print("--------------------------------------------------------------------------------------------------------------------------------------------------------")
+    cursor.close()
+    del cursor
+    db_obj.close()
     return
 
 def threader():
@@ -388,15 +391,18 @@ def simulate(sim_data):
     return
 
 def gs(val,num):
-    ret = val
-    lim = (num-len(val))
-    x   = 0
-    while lim:
-        if x:
-            ret = ret+" "
-            x   =0
-        else:
-            ret = " "+ret
-            x   = 1 
-        lim -= 1 
-    return ret
+	ret = val
+	lim = (num-len(val))
+	if lim < 0:
+		lim = 0
+    
+	x   = 0
+	while lim:
+		if x:
+			ret = ret+" "
+			x   =0
+		else:
+			ret = " "+ret
+			x   = 1 
+		lim -= 1 
+	return ret

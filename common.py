@@ -128,3 +128,20 @@ def dump(obj,spc):
 		spc += " "
 		print(spc,obj)
 	return
+
+def gs(val,num):
+	ret = val
+	lim = (num-len(val))
+	if lim < 0:
+		lim = 0
+    
+	x   = 0
+	while lim:
+		if x:
+			ret = ret+" "
+			x   =0
+		else:
+			ret = " "+ret
+			x   = 1 
+		lim -= 1 
+	return ret
