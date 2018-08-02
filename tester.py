@@ -4,19 +4,20 @@ import threading
 import numpy as np
 import sys
 import time
+import simulation as sim
 from strategy import ohl
 from datetime import datetime,timedelta
 from pytz import timezone,utc
 
-def tester(strategy,capital,star_param,bulk_id):
+def tester(strategy,capital,star_param,bulk_id,data):
     star_id = c.gen_id("strategy","strategy_id")
     c.pr("I","Testing Strategy "+strategy.upper()+" with capital "+str(capital)+" Strategy ID -> "+star_id,1)
     star_param['ID'] = star_id
     s.execQuery("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star_param).replace("'","''")+"')")
-    eval(strategy)(capital,star_param)
+    eval(strategy)(capital,star_param,data)
     return
 
-def bulk_test():
+def bulk_test(stat,init,scrip):
     #OHL Bulk Test
     #Variance Range between 0.001 to 0.003
     var_range = np.arange(0.002,0.004,0.001)
@@ -25,7 +26,10 @@ def bulk_test():
     t2_range  = np.arange(0.006,0.012,0.001)
     md_range  = range(15,20)
     ctr       = 0
+    data      = c.fetch_scrip_data(scrip,init,0)
     bulk_id   = c.gen_id("strategy","bulk_id")
+    c.pr("I","BULK ID --> "+str(bulk_id),1)
+    time.sleep(2)
     for var in var_range:
         var = round(var,3)
         for sl in sl_range:
@@ -38,20 +42,39 @@ def bulk_test():
                         star_param['MAX']     = md    
                         star_param['THR']     = md - 1
                         star_param['VAR']     = var 
-                        star_param['START']   = 151477753
+                        star_param['START']   = init
                         star_param['SL']      = sl
                         star_param['T1']      = t1
                         star_param['T2']      = t2
-                        star_param['SC']      = "SBIN"
+                        star_param['SC']      = scrip
                         ctr = ctr + 1 
                         start = datetime.now()
-                        tester("ohl",100000,star_param,bulk_id)
+                        if stat:
+                            if map_existing(star_param,bulk_id,"ohl"):
+                                c.pr("I","Simulation Data Exists Not Running For Params "+str(star_param),1)
+                            else:
+                                c.pr("I","Simulation Data Does Not Exists Running For Params "+str(star_param),1)
+                                tester("ohl",100000,star_param,bulk_id,data)
+                                #time.sleep(1)
+                        else:
+                            tester("ohl",100000,star_param,bulk_id,data)
                         end = datetime.now()
                         runtime  = end-start
                         msg = ("Strategy -> "+bulk_id+" Combination No -> "+str(ctr)+" Start -> "+str(start)+" End -> "+str(end)+" Runtime -> "+str(runtime))
-                        time.sleep(5)
                         c.pr("I",msg,1)
                         
+    return
+
+def map_existing(star_param,bulk_id,strategy):
+    saved = s.sql_hash("strategy","strategy_id","params","WHERE params LIKE '"+str(star_param).replace("'","''")[:-1]+"%' LIMIT 1")
+    if len(saved):
+        star_id  = list(saved.keys())[0]
+        star     = saved[star_id]['params']
+        print("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star).replace("'","''")+"')")
+        s.execQuery("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star).replace("'","''")+"')")
+        return 1
+    else:
+        return 0
     return
 
 def check_best(sim_map,val,sim,ustar):
@@ -193,7 +216,7 @@ def bulk_stats(bulk_id):
     print("|  Sl  | Strategy | Count |   Win%  |                                                 Strategy Params                                                |")
     print("------------------------------------------------------------------------------------------------------------------------------------------------------")
     print("|                                                Top 10 Strategies By Win % For SELL Transaction                                                     |")
-    print("------------------------------------------------------------------------------------------------------------- ----------------------------------------")
+    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
     ctr = 1
     for st in sorted(best['WIN']['SELL'],key=best['WIN']['SELL'].get,reverse=True):
         msg  = ("|"+c.gs(str(ctr),6)+"|"+c.gs(st,10)+"|")
@@ -228,8 +251,8 @@ star_param['T2']      = 0.010
 star_param['SC']      = "NIFTY"
 #print(c.fetch_scrip_data("NIFTY","1518148860","1518126000"))
 #tester("ohl",150000,star_param,"NULL")
-#sim.display_stats("QTJE0UFK")
-#bulk_test()
-bulk_stats("QI2XBGAN")
+#sim.display_stats("HP45I5R6")
+#bulk_test(1,151477753,"ONGC")
+bulk_stats("JRH5OA8S")
 #bulk_stats("6UW90DRQ")
 #FVDPYVRC

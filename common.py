@@ -145,3 +145,9 @@ def gs(val,num):
 			x   = 1 
 		lim -= 1 
 	return ret
+
+def fetch_scrip_cache(data,start,end):
+	ret_data = {}
+	tkeys = data.keys()
+	print(str(len(tkeys)))
+	return ret_data

@@ -8,6 +8,8 @@ import math
 import secrets
 import string
 import os
+import sys
+from datetime import datetime,timedelta
 from queue import Queue
 
 q = Queue()
@@ -15,7 +17,7 @@ print_lock = threading.Lock()
 
 def init_sim(sims,rans,st_id):
     c.pr("I","Initializing Simulation",0)
-    max_threads = 5
+    max_threads = 2
     if len(sims) < max_threads:
         max_threads = len(sims)
 
@@ -227,6 +229,7 @@ def simulate(sim_data):
     sim_name = sim_data['NM']
     sim_type = sim_data['ST']
     str_id   = sim_data['ID']
+    data     = sim_data['DATA']
     sl_val  = 0
     t1_val  = 0
     t2_val  = 0
@@ -241,13 +244,23 @@ def simulate(sim_data):
     
     c.pr("I","Starting simulation for [SIM ID -> "+sim_id+"] [Scrip -> "+scrip +"] [Type -> "+sim_type+"] [Transaction -> "+trans+"] [Entry Point ->  "+c.get_date(start)+"] [Capital -> "+str(capt)+"] [T1 -> "+str(tar1)+"%] [T2 -> "+str(tar2)+"%] [SL -> "+str(sl)+"%]",1)
     #Step 1 Load the Scrip
-    data  = c.fetch_scrip_data(scrip,start,end)
+   
+    #data  = c.fetch_scrip_data(scrip,start,end)
+    #data  = c.fetch_scrip_cache(cdata,start,end)
     tkeys = list(data.keys())
     tkeys.sort()
+    tctr = 0
+    for tk in tkeys:
+        if tk == start:
+            break
+        else:
+            tctr += 1
+    tkeys = tkeys[tctr:]
     #Step 2 Take entry at the entry point at average price of first data candle
     entry   = tkeys[0]
     ep_data = data[tkeys[0]]
     #Removing key which corresponds to EP
+      
     tkeys.pop(0)
     avg_ent = round((ep_data['open'] + ep_data['close'] + ep_data['high'] + ep_data['low'])/4,1)
     #Step 3 Calulate the volume which can be undertaken
