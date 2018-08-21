@@ -28,12 +28,13 @@ def fetch_local_data():
 		typs = {"EQ":scrip,"FUT":scrip+"_FUT"}
 		c.pr("I","Processing For scrip --> "+scrip,1)
 		for typ in typs:
-			months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
+			#months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
+			months = ['JUL']
 			for mon in months:
-				data = fetch_csv(scrip,typ,"2017",mon)
+				data = fetch_csv(scrip,typ,"2018",mon)
 				if(len(data)):
 					tbl = typs[typ]
-					#store_data(data,tbl)
+					store_data(data,tbl)
 					clean_data(tbl)
 	return
 

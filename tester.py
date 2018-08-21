@@ -5,31 +5,38 @@ import numpy as np
 import sys
 import time
 import simulation as sim
+import threading
+from  queue  import Queue
 from strategy import ohl
 from datetime import datetime,timedelta
 from pytz import timezone,utc
 
-def tester(strategy,capital,star_param,bulk_id,data):
+q = Queue()
+lock = threading.Lock()
+
+def tester(strategy,capital,star_param,bulk_id,data,typ):
     star_id = c.gen_id("strategy","strategy_id")
     c.pr("I","Testing Strategy "+strategy.upper()+" with capital "+str(capital)+" Strategy ID -> "+star_id,1)
     star_param['ID'] = star_id
     s.execQuery("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star_param).replace("'","''")+"')")
-    eval(strategy)(capital,star_param,data)
+    eval(strategy)(capital,star_param,data,typ)
+    #sim.display_stats(star_id)
     return
 
-def bulk_test(stat,init,scrip):
+def bulk_test(stat,init,scrip,strategy):
     #OHL Bulk Test
     #Variance Range between 0.001 to 0.003
-    var_range = np.arange(0.002,0.004,0.001)
+    var_range = np.arange(0.002,0.003,0.001)
     sl_range  = np.arange(0.002,0.004,0.001)
-    t1_range  = np.arange(0.004,0.010,0.001)
-    t2_range  = np.arange(0.006,0.012,0.001)
-    md_range  = range(15,20)
+    t1_range  = np.arange(0.004,0.007,0.001)
+    t2_range  = np.arange(0.006,0.010,0.001)
+    md_range  = range(15,18)
     ctr       = 0
     data      = c.fetch_scrip_data(scrip,init,0)
     bulk_id   = c.gen_id("strategy","bulk_id")
     c.pr("I","BULK ID --> "+str(bulk_id),1)
-    time.sleep(2)
+    stat_map  = {}
+    time.sleep(10)
     for var in var_range:
         var = round(var,3)
         for sl in sl_range:
@@ -39,38 +46,63 @@ def bulk_test(stat,init,scrip):
                 for t2 in t2_range:
                     t2 = round(t2,3)
                     for md in md_range: 
-                        star_param['MAX']     = md    
-                        star_param['THR']     = md - 1
-                        star_param['VAR']     = var 
-                        star_param['START']   = init
-                        star_param['SL']      = sl
-                        star_param['T1']      = t1
-                        star_param['T2']      = t2
-                        star_param['SC']      = scrip
-                        ctr = ctr + 1 
-                        start = datetime.now()
                         if stat:
+                            star_param            = {}
+                            star_param['MAX']     = md    
+                            star_param['THR']     = md - 1
+                            star_param['VAR']     = var 
+                            star_param['START']   = init
+                            star_param['SL']      = sl
+                            star_param['T1']      = t1
+                            star_param['T2']      = t2
+                            star_param['SC']      = scrip
+                            ctr = ctr + 1 
+                            start = datetime.now()
+
                             if map_existing(star_param,bulk_id,"ohl"):
                                 c.pr("I","Simulation Data Exists Not Running For Params "+str(star_param),1)
                             else:
                                 c.pr("I","Simulation Data Does Not Exists Running For Params "+str(star_param),1)
-                                tester("ohl",100000,star_param,bulk_id,data)
-                                #time.sleep(1)
+                                stat_map[ctr] = {}
+                                stat_map[ctr]['S'] = strategy
+                                stat_map[ctr]['C'] = 100000 
+                                stat_map[ctr]['B'] = bulk_id
+                                stat_map[ctr]['D'] = data
+                                stat_map[ctr]['P'] = star_param
                         else:
-                            tester("ohl",100000,star_param,bulk_id,data)
-                        end = datetime.now()
-                        runtime  = end-start
-                        msg = ("Strategy -> "+bulk_id+" Combination No -> "+str(ctr)+" Start -> "+str(start)+" End -> "+str(end)+" Runtime -> "+str(runtime))
-                        c.pr("I",msg,1)
-                        
+                            star_param            = {}
+                            star_param['MAX']     = md    
+                            star_param['THR']     = md - 1
+                            star_param['VAR']     = var 
+                            star_param['START']   = init
+                            star_param['SL']      = sl
+                            star_param['T1']      = t1
+                            star_param['T2']      = t2
+                            star_param['SC']      = scrip
+                            ctr = ctr + 1 
+                            
+                            stat_map[ctr] = {}
+                            stat_map[ctr]['S'] = strategy
+                            stat_map[ctr]['C'] = 100000 
+                            stat_map[ctr]['B'] = bulk_id
+                            stat_map[ctr]['D'] = data
+                            stat_map[ctr]['P'] = star_param                 
+    bulk_launch(stat_map)    
+    bulk_stats(bulk_id)     
+    return
+
+def bulk_sanitize(bulk_id):
+    c.pr("I","Saniting Bulk Data For Bulk ID "+bulk_id,1)
     return
 
 def map_existing(star_param,bulk_id,strategy):
     saved = s.sql_hash("strategy","strategy_id","params","WHERE params LIKE '"+str(star_param).replace("'","''")[:-1]+"%' LIMIT 1")
+    #print(saved)
+    #sys.exit()
     if len(saved):
         star_id  = list(saved.keys())[0]
         star     = saved[star_id]['params']
-        print("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star).replace("'","''")+"')")
+        #print("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star).replace("'","''")+"')")
         s.execQuery("INSERT INTO strategy VALUES ('"+strategy.upper()+"','"+star_id+"','"+bulk_id+"','"+str(star).replace("'","''")+"')")
         return 1
     else:
@@ -92,9 +124,39 @@ def check_best(sim_map,val,sim,ustar):
         del sim_map[lkey]
     return sim_map
 
+def bulk_launch(bulk_stat):
+    c.pr("I","Initiating Bulk Launch For "+str(len(bulk_stat))+" Strategies",1)
+    time.sleep(5)
+    max_threads = 20
+    if len(bulk_stat) < max_threads:
+        max_threads = len(bulk_stat)
+
+    for x in range(max_threads):
+        t = threading.Thread(target=threader)
+        t.daemon = True
+        t.start()
+    
+    for z in bulk_stat:
+        q.put(bulk_stat[z])
+
+    q.join()
+    '''for key in bulk_stat:
+        tester(bulk_stat[key]['S'],bulk_stat[key]['C'],bulk_stat[key]['P'],bulk_stat[key]['B'],bulk_stat[key]['D'],"B")'''
+    return
+
+def threader():
+    while True:
+        sim_data = q.get()
+        if sim_data is None:
+            break
+        tester(sim_data['S'],sim_data['C'],sim_data['P'],sim_data['B'],sim_data['D'],"B")
+        q.task_done()
+    return
+
 def bulk_stats(bulk_id):
-    uniq_strategy = s.sql_hash("strategy","strategy_id","params","WHERE bulk_id='"+bulk_id+"'")
-    c.pr("I",str(len(uniq_strategy))+" Unique Parameters Identified",1)
+    uniq_strategy = s.sql_hash("strategy","strategy_id","params","WHERE bulk_id='"+bulk_id+"' AND strategy_id IN (SELECT strategy_id FROM sim_tracker)")
+    #uniq_strategy = s.sql_hash("strategy","strategy_id","params","WHERE bulk_id='"+bulk_id+"' AND strategy_id LIKE 'K%'")
+    c.pr("I",str(len(uniq_strategy))+" Unique Parameters Identified For Strategy "+bulk_id,1)
     uniq_cnt       = {}
     sim_map        = {}
     best           = {}
@@ -130,7 +192,7 @@ def bulk_stats(bulk_id):
                     sim_map[ustar][tp][st][tr] = 0
 
         sim_res             = s.sql_hash("sim_results","sim_id","SUM(result)","WHERE sim_id IN "+sim_ids_str+" GROUP BY sim_id")
-
+     
         for sim in sim_res:
             trn = uniq_sims[sim]['transaction']
             typ = uniq_sims[sim]['type']
@@ -151,15 +213,30 @@ def bulk_stats(bulk_id):
             else:   
                 sim_map[ustar][trn]['L'][typ]   += 1   
 
-        win = round(((sim_map[ustar]['SELL']['W']['ACT']/sim_map[ustar]['SELL']['T']['ACT'])*100),2)
-        sim_map[ustar]['SELL']['WP']['ACT'] = win
-        win = round(((sim_map[ustar]['SELL']['W']['RAN']/sim_map[ustar]['SELL']['T']['RAN'])*100),2)
-        sim_map[ustar]['SELL']['WP']['RAN']  = win
+       
+        if sim_map[ustar]['SELL']['T']['ACT']: 
+            win = round(((sim_map[ustar]['SELL']['W']['ACT']/sim_map[ustar]['SELL']['T']['ACT'])*100),2)
+            sim_map[ustar]['SELL']['WP']['ACT'] = win
+        else:
+            sim_map[ustar]['SELL']['WP']['ACT'] = 0
 
-        win = round(((sim_map[ustar]['BUY']['W']['ACT']/sim_map[ustar]['BUY']['T']['ACT'])*100),2)
-        sim_map[ustar]['BUY']['WP']['ACT'] = win
-        win = round(((sim_map[ustar]['BUY']['W']['RAN']/sim_map[ustar]['BUY']['T']['RAN'])*100),2)
-        sim_map[ustar]['BUY']['WP']['RAN']  = win
+        if sim_map[ustar]['SELL']['T']['RAN']:
+            win = round(((sim_map[ustar]['SELL']['W']['RAN']/sim_map[ustar]['SELL']['T']['RAN'])*100),2)
+            sim_map[ustar]['SELL']['WP']['RAN']  = win
+        else:
+            sim_map[ustar]['SELL']['WP']['RAN']  = 0
+
+        if sim_map[ustar]['BUY']['T']['ACT']:
+            win = round(((sim_map[ustar]['BUY']['W']['ACT']/sim_map[ustar]['BUY']['T']['ACT'])*100),2)
+            sim_map[ustar]['BUY']['WP']['ACT'] = win
+        else:
+            sim_map[ustar]['BUY']['WP']['ACT'] = 0
+        
+        if sim_map[ustar]['BUY']['T']['RAN']:
+            win = round(((sim_map[ustar]['BUY']['W']['RAN']/sim_map[ustar]['BUY']['T']['RAN'])*100),2)
+            sim_map[ustar]['BUY']['WP']['RAN']  = win
+        else:
+            sim_map[ustar]['BUY']['WP']['RAN']  = 0
 
         #Identify the best strategy by % and profit
         if len(best['WIN']['SELL']) < 10:
@@ -172,8 +249,6 @@ def bulk_stats(bulk_id):
         else:
             best['WIN']['BUY'] = check_best(best['WIN']['BUY'],sim_map[ustar]['BUY']['WP']['ACT'],sim,ustar)
         
-        
-        
         if len(best['PROFIT']['SELL']) < 10:
             best['PROFIT']['SELL'][ustar] = round(sim_map[ustar]['SELL']['P']['ACT'],2)
         else:
@@ -185,74 +260,86 @@ def bulk_stats(bulk_id):
              best['PROFIT']['BUY'] = check_best(best['PROFIT']['BUY'],sim_map[ustar]['BUY']['P']['ACT'],sim,ustar)
 
     #Printing part below
-
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
-    print("|                                                               Bulk Simulation Summary                                                              |")
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
-    print("|  Sl  | Strategy | Count | Amount  |                                                 Strategy Params                                                |")
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
-    print("|                                                Top 10 Strategies By Profit For SELL Transaction                                                    |")
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
+    #print(best)
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|                                                               Bulk Simulation Summary                                                             |")
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|  Sl  | Strategy | Count |  Win %  |  Amount  |                                           Strategy Params                                          |")
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|                                                                        Top 10 Strategies By Profit For SELL Transaction                           |")
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
     ctr = 1
     for st in sorted(best['PROFIT']['SELL'],key=best['PROFIT']['SELL'].get,reverse=True):
         msg  = ("|"+c.gs(str(ctr),6)+"|"+c.gs(st,10)+"|")
         msg += (c.gs(str(uniq_cnt[st]['SELL']['ACT']),6)+"|") 
+        #msg += (c.gs(str(best['WIN']['SELL'][st]),10)+"|")
+        msg += (c.gs(str(sim_map[st]['SELL']['WP']['ACT']),10)+"|")
         msg += (c.gs(str(best['PROFIT']['SELL'][st]),10)+"|")
-        msg += (c.gs(uniq_strategy[st]['params'][0:-19]+"}",112)+"|")
+        msg += (c.gs((uniq_strategy[st]['params'][1:-19]).replace("'","").replace(",","").replace(": ",":"),100)+"|")
         print(msg)
         ctr += 1
     print("------------------------------------------------------------------------------------------------------------------------------------------------------") 
-    print("|                                                Top 10 Strategies By Profit For BUY Transaction                                                     |")
+    print("|                                                                        Top 10 Strategies By Profit For BUY Transaction                            |")
     print("------------------------------------------------------------------------------------------------------------------------------------------------------")   
     ctr = 1
     for st in sorted(best['PROFIT']['BUY'],key=best['PROFIT']['BUY'].get,reverse=True):
         msg  = ("|"+c.gs(str(ctr),6)+"|"+c.gs(st,10)+"|")
         msg += (c.gs(str(uniq_cnt[st]['BUY']['ACT']),6)+"|")  
+        #msg += (c.gs(str(best['WIN']['BUY'][st]),10)+"|")
+        msg += (c.gs(str(sim_map[st]['BUY']['WP']['ACT']),10)+"|")
         msg += (c.gs(str(best['PROFIT']['BUY'][st]),10)+"|")
-        msg += (c.gs(uniq_strategy[st]['params'][0:-19]+"}",112)+"|")
+        #msg += (c.gs(uniq_strategy[st]['params'][0:-19]+"}",112)+"|")
+        msg += (c.gs((uniq_strategy[st]['params'][1:-19]).replace("'","").replace(",","").replace(": ",":"),100)+"|")
         print(msg)
         ctr += 1
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
-    print("|  Sl  | Strategy | Count |   Win%  |                                                 Strategy Params                                                |")
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
-    print("|                                                Top 10 Strategies By Win % For SELL Transaction                                                     |")
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
+    
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|  Sl  | Strategy | Count |  Win %  |  Amount  |                                           Strategy Params                                          |")
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|                                                                        Top 10 Strategies By Profit For WIN % For Sell Transaction                 |")
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
+
     ctr = 1
     for st in sorted(best['WIN']['SELL'],key=best['WIN']['SELL'].get,reverse=True):
         msg  = ("|"+c.gs(str(ctr),6)+"|"+c.gs(st,10)+"|")
         msg += (c.gs(str(uniq_cnt[st]['SELL']['ACT']),6)+"|")
         msg += (c.gs(str(best['WIN']['SELL'][st]),10)+"|")
-        msg += (c.gs(uniq_strategy[st]['params'][0:-19]+"}",112)+"|")
+        #msg += (c.gs(str(best['PROFIT']['SELL'][st]),10)+"|")
+        msg += (c.gs(str(round(sim_map[st]['SELL']['P']['ACT'],2)),10)+"|")
+        msg += (c.gs((uniq_strategy[st]['params'][1:-19]).replace("'","").replace(",","").replace(": ",":"),100)+"|")
         print(msg)
         ctr += 1
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
-    print("|                                                Top 10 Strategies By Win % For BUY Transaction                                                      |")
-    print("------------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("|                                               Top 10 Strategies By Win % For BUY Transaction                                                      |")
+    print("-----------------------------------------------------------------------------------------------------------------------------------------------------")
     ctr = 1
     for st in sorted(best['WIN']['BUY'],key=best['WIN']['BUY'].get,reverse=True):
         msg  = ("|"+c.gs(str(ctr),6)+"|"+c.gs(st,10)+"|")
         msg += (c.gs(str(uniq_cnt[st]['BUY']['ACT']),6)+"|")   
         msg += (c.gs(str(best['WIN']['BUY'][st]),10)+"|")
-        msg += (c.gs(uniq_strategy[st]['params'][0:-19]+"}",112)+"|")
+        #msg += (c.gs(str(best['PROFIT']['BUY'][st]),10)+"|")
+        msg += (c.gs(str(round(sim_map[st]['BUY']['P']['ACT'],2)),10)+"|")
+        msg += (c.gs((uniq_strategy[st]['params'][1:-19]).replace("'","").replace(",","").replace(": ",":"),100)+"|")
         print(msg)
         ctr += 1
     print("------------------------------------------------------------------------------------------------------------------------------------------------------")
     return
 #Testing part
-
+#{'MAX': 15, 'THR': 14, 'VAR': 0.003, 'START': 151477753, 'SL': 0.002, 'T1': 0.004, 'T2': 0.006, 'SC': 'AXISBANK', 'ID': 'VFVAAFNI'}
 star_param = {}
 star_param['MAX']     = 15    #Maximum Data points to check 
 star_param['THR']     = 14 
-star_param['VAR']     = 0.001 #Maximum Variance in price
+star_param['VAR']     = 0.003 #Maximum Variance in price
 star_param['START']   = 151477753 #Starting Point June 1
-star_param['SL']      = 0.004
-star_param['T1']      = 0.008
-star_param['T2']      = 0.010
-star_param['SC']      = "NIFTY"
+star_param['SL']      = 0.002
+star_param['T1']      = 0.004
+star_param['T2']      = 0.006
+star_param['SC']      = "AXISBANK"
+
+#{'MAX': 16, 'THR': 15, 'VAR': 0.002, 'START': 151477753, 'SL': 0.002, 'T1': 0.004, 'T2': 0.011, 'SC': 'AXISBANK', 'ID': '6OSZUEEP'}
 #print(c.fetch_scrip_data("NIFTY","1518148860","1518126000"))
-#tester("ohl",150000,star_param,"NULL")
-#sim.display_stats("HP45I5R6")
-#bulk_test(1,151477753,"ONGC")
-bulk_stats("JRH5OA8S")
-#bulk_stats("6UW90DRQ")
-#FVDPYVRC 
+#tester("ohl",150000,star_param,"NULL",{},"I")
+sim.display_stats("VFT30IAE")
+#bulk_test(1,151477753,"HDFCBANK","ohl")
+#bulk_stats("SAIIXKLO") 
+#bulk_stats("HVZ4EG6J")

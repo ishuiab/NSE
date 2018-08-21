@@ -39,9 +39,6 @@ def sql_insert(table,keys,data,limit):
         dap = dap[1:]
         qry = "INSERT INTO `"+table+"` ("+keys+") VALUES "+dap
         execQuery(qry)
-    cursor.close()
-    del cursor
-    db_obj.close()
     return
 
 def sql_hash(table,key,cols,whr):

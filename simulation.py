@@ -13,11 +13,11 @@ from datetime import datetime,timedelta
 from queue import Queue
 
 q = Queue()
-print_lock = threading.Lock()
+lock = threading.Lock()
 
 def init_sim(sims,rans,st_id):
     c.pr("I","Initializing Simulation",0)
-    max_threads = 2
+    max_threads = 5
     if len(sims) < max_threads:
         max_threads = len(sims)
 
@@ -31,10 +31,8 @@ def init_sim(sims,rans,st_id):
     
     for key in rans:
         q.put(rans[key])
-
     q.join()
     c.pr("I","Simulation Finished",1)
-    #os.system('cls')
     display_stats(st_id)
     return
 
@@ -181,7 +179,7 @@ def display_stats(st_id):
                 msg += gs(tst,20)+"|"
             else:   
                 msg +=  gs("NONE",20)+"|"
-        msg +=  gs(str(sum_map[sim]['PL']),10)+"|"
+        msg +=  gs(str(round(sum_map[sim]['PL'],2)),10)+"|"
         if sum_map[sim]['ST'] == "ACT":
             if sum_map[sim]['TR'] == "BUY":
                 print(msg)
@@ -283,7 +281,6 @@ def simulate(sim_data):
     #Step 4.1 Record the simulation data in DB
     sim_query = "INSERT INTO sim_tracker VALUES ('"+sim_id+"','"+str_id+"','"+scrip+"','"+sim_type+"','"+trans+"',"+str(capt)+","+str(tar1)+","+str(tar2)+","+str(sl)+","+str(t1_vol)+","+str(t2_vol)+",'"+start+"','"+end+"')"
     s.execQuery(sim_query)
-
     #c.pr("I","First Candle [Open "+str(ep_data['open'])+"] [Low "+str(ep_data['low'])+"] [High "+str(ep_data['high'])+"] [Close "+str(ep_data['close'])+"]",1)
     c.pr("I","[EP AVG(OLHC) "+str(avg_ent)+"] [SL "+str(sl_val)+"] [T1 "+str(t1_val)+"] [T2 "+str(t2_val)+"] [Vol "+str(vol)+"] [T1 Vol "+str(t1_vol)+"] [T2 Vol "+str(t2_vol)+"]" ,1)
 
@@ -298,7 +295,7 @@ def simulate(sim_data):
                 if sl_val >= avg_prc:
                     if t1_vol:
                         if avg_prc <= t1_val:
-                            c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " T1 Hit -> Yes" ,1)
+                            #c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " T1 Hit -> Yes" ,1)
                             results[key]       = {}
                             results[key]['EN'] = avg_ent
                             results[key]['EX'] = avg_prc
@@ -309,7 +306,7 @@ def simulate(sim_data):
                             
                     if t1_vol == 0 and t2_vol:
                         if avg_prc <= t2_val:
-                            c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " T2 Hit -> Yes" ,1)
+                            #c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " T2 Hit -> Yes" ,1)
                             if key in results:
                                 results[key]['VL']  += t2_vol
                                 results[key]['ST']  = "T2H"
@@ -325,7 +322,7 @@ def simulate(sim_data):
                                 t2_vol             = 0    
                               
                 else:  
-                    c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " SL Hit -> Yes" ,1)
+                    #c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " SL Hit -> Yes" ,1)
                     results[key]       = {}
                     results[key]['EN'] = avg_ent
                     results[key]['EX'] = avg_prc
@@ -337,7 +334,7 @@ def simulate(sim_data):
                 if sl_val <= avg_prc:
                     if t1_vol:
                         if avg_prc >= t1_val:
-                            c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " T1 Hit -> Yes" ,1)
+                            #c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " T1 Hit -> Yes" ,1)
                             results[key]       = {}
                             results[key]['EN'] = avg_ent
                             results[key]['EX'] = avg_prc
@@ -348,7 +345,7 @@ def simulate(sim_data):
                             
                     if t1_vol == 0 and t2_vol:
                         if avg_prc >= t2_val:
-                            c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " T2 Hit -> Yes" ,1)
+                            #c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " T2 Hit -> Yes" ,1)
                             if key in results:
                                 
                                 results[key]['VL']  += t2_vol
@@ -365,7 +362,7 @@ def simulate(sim_data):
                                 t2_vol             = 0    
                               
                 else:  
-                    c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " SL Hit -> Yes" ,1)
+                    #c.pr("I","Volume Is At "+str(vol)+" On "+c.get_time(key)+" AVG Price "+str(avg_prc)+ " SL Hit -> Yes" ,1)
                     results[key]       = {}
                     results[key]['EN'] = avg_ent
                     results[key]['EX'] = avg_prc
@@ -379,7 +376,7 @@ def simulate(sim_data):
 
     #If the volume is still there at 3:10 square off at 3:10
     if vol:
-        c.pr("I","Squaring of Position At 03:10 PM",1)
+        #c.pr("I","Squaring of Position At 03:10 PM",1)
         ed_data = data[key]
         avg_ext = round((ed_data['open'] + ed_data['close'] + ed_data['high'] + ed_data['low'])/4,1)
         results[key]       = {}
