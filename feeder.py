@@ -29,9 +29,9 @@ def fetch_local_data():
 		c.pr("I","Processing For scrip --> "+scrip,1)
 		for typ in typs:
 			#months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
-			months = ['JUL']
+			months = ['FEB']
 			for mon in months:
-				data = fetch_csv(scrip,typ,"2018",mon)
+				data = fetch_csv(scrip,typ,"2019",mon)
 				if(len(data)):
 					tbl = typs[typ]
 					store_data(data,tbl)
@@ -50,7 +50,7 @@ def fetch_csv(scrip,typ,year,month):
 		lines = (fobj.read()).split("\n")
 		for line in lines:
 			tmp_str  = line.split(",")
-			if len(tmp_str) == 8:
+			if len(tmp_str) == 9:
 				dt	   = tmp_str[1][:4] +"-"+tmp_str[1][4:6]+"-"+tmp_str[1][6:8]+" "+tmp_str[2]+":00"
 				o 	   = tmp_str[3]
 				h 	   = tmp_str[4]
@@ -71,7 +71,6 @@ def fetch_csv(scrip,typ,year,month):
 				#ret.append(qry)
 	else:
 		c.pr("W","File Path Does Not Exists -> "+fpath,1)
-	
 	return data_map
 
 def clean_data(scrip):
@@ -308,7 +307,7 @@ def check_tables():
 	return
 #Script Flow Starts Here
 scrips 		= {}
-#clean_data("hdil_FUT")
+#clean_data("nifty")
 init()
 #Flow End Here.
 

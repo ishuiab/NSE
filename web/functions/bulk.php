@@ -373,7 +373,7 @@ function get_star_det($star_id,$trn){
     $ret .=  "</table>";
     $ret  .=  "<br><table style='width:98%;vertical-align:middle;' class='table table-hover'>
                             <tr>
-                                <th colspan='11' style='font-size:12px;text-align:center;font-weight:bold;'>Individual Simulation Details For Actual Simulations</th>
+                                <th colspan='12' style='font-size:12px;text-align:center;font-weight:bold;'>Individual Simulation Details For Actual Simulations</th>
                             </tr>
                             <tr>
                                 <th style='font-size:12px;text-align:center;font-weight:bold;'>Sl No</th>
@@ -388,6 +388,7 @@ function get_star_det($star_id,$trn){
                                 <th style='font-size:12px;text-align:center;font-weight:bold;'>SL Details</th>
                                 <th style='font-size:12px;text-align:center;font-weight:bold;'>SQ Details</th>
                                 <th style='font-size:12px;text-align:center;font-weight:bold;'>Profit</th>
+                                <th style='font-size:12px;text-align:center;font-weight:bold;'>Chart</th>
                             </tr>";
     $ctr = 1;
     arsort($sim_data['ACT']['S']);
@@ -425,13 +426,16 @@ function get_star_det($star_id,$trn){
                         <td style='font-size:11px;text-align:center;font-weight:bold;' class='$cls'>".$std['SL']."</td>
                         <td style='font-size:11px;text-align:center;font-weight:bold;' class='$cls'>".$std['SQ']."</td>
                         <td style='font-size:11px;text-align:center;font-weight:bold;' class='$cls'>$prf</td>
+                        <td class='$cls'> 
+                            <button type='button'  style='font-size:10px;width:80px;' onclick='window.open(\"chart.php?id=$rd&scrip=$sim_data[scrip]&int=3\")' class='btn btn-success .btn-sm'>View Chart</button>
+                        </td>
                   </tr>";
         $ctr++;          
     }
     $ret  .=  "</table>";
     $ret  .=  "<br><table style='width:98%;vertical-align:middle;' class='table table-hover'>
                             <tr>
-                                <th colspan='11' style='font-size:12px;text-align:center;font-weight:bold;'>Individual Simulation Details For Random Simulations</th>
+                                <th colspan='12' style='font-size:12px;text-align:center;font-weight:bold;'>Individual Simulation Details For Random Simulations</th>
                             </tr>
                             <tr>
                                 <th style='font-size:12px;text-align:center;font-weight:bold;'>Sl No</th>
@@ -445,6 +449,7 @@ function get_star_det($star_id,$trn){
                                 <th style='font-size:12px;text-align:center;font-weight:bold;'>SL Details</th>
                                 <th style='font-size:12px;text-align:center;font-weight:bold;'>SQ Details</th>
                                 <th style='font-size:12px;text-align:center;font-weight:bold;'>Profit</th>
+                                <th style='font-size:12px;text-align:center;font-weight:bold;'>Chart</th>
                             </tr>";
     $ctr = 1;
     arsort($sim_data['RAN']['S']);
@@ -482,6 +487,9 @@ function get_star_det($star_id,$trn){
                         <td style='font-size:11px;text-align:center;font-weight:bold;' class='$cls'>".$std['SL']."</td>
                         <td style='font-size:11px;text-align:center;font-weight:bold;' class='$cls'>".$std['SQ']."</td>
                         <td style='font-size:11px;text-align:center;font-weight:bold;' class='$cls'>$prf</td>
+                        <td class='$cls'> 
+                            <button type='button'  style='font-size:10px;width:80px;' onclick='window.open(\"chart.php?id=$rd&scrip=$sim_data[scrip]&int=3\")' class='btn btn-success .btn-sm'>View Chart</button>
+                        </td>
                   </tr>";
         $ctr++;          
     }

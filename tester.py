@@ -1,15 +1,16 @@
-import sql as s
-import common as c
 import threading
-import numpy as np
 import sys
 import time
 import simulation as sim
-import threading
+import sql as s
+import common as c
+import numpy as np
+import itertools as it
 from  queue  import Queue
-from strategy import ohl
+from strategy import ohl,orb
 from datetime import datetime,timedelta
 from pytz import timezone,utc
+
 
 q = Queue()
 lock = threading.Lock()
@@ -26,11 +27,11 @@ def tester(strategy,capital,star_param,bulk_id,data,typ):
 def bulk_test(stat,init,scrip,strategy):
     #OHL Bulk Test
     #Variance Range between 0.001 to 0.003
-    var_range = np.arange(0.002,0.003,0.001)
+    var_range = np.arange(0.002,0.004,0.001)
     sl_range  = np.arange(0.002,0.004,0.001)
     t1_range  = np.arange(0.004,0.007,0.001)
-    t2_range  = np.arange(0.006,0.010,0.001)
-    md_range  = range(15,18)
+    t2_range  = np.arange(0.006,0.009,0.001)
+    md_range  = range(15,20)
     ctr       = 0
     data      = c.fetch_scrip_data(scrip,init,0)
     bulk_id   = c.gen_id("strategy","bulk_id")
@@ -86,8 +87,12 @@ def bulk_test(stat,init,scrip,strategy):
                             stat_map[ctr]['C'] = 100000 
                             stat_map[ctr]['B'] = bulk_id
                             stat_map[ctr]['D'] = data
-                            stat_map[ctr]['P'] = star_param                 
-    bulk_launch(stat_map)    
+                            stat_map[ctr]['P'] = star_param
+
+    if len(stat_map) != 0:
+        bulk_launch(stat_map)
+    else:
+        c.pr("I","No Simulations To Run",1)    
     bulk_stats(bulk_id)     
     return
 
@@ -97,8 +102,6 @@ def bulk_sanitize(bulk_id):
 
 def map_existing(star_param,bulk_id,strategy):
     saved = s.sql_hash("strategy","strategy_id","params","WHERE params LIKE '"+str(star_param).replace("'","''")[:-1]+"%' LIMIT 1")
-    #print(saved)
-    #sys.exit()
     if len(saved):
         star_id  = list(saved.keys())[0]
         star     = saved[star_id]['params']
@@ -140,8 +143,6 @@ def bulk_launch(bulk_stat):
         q.put(bulk_stat[z])
 
     q.join()
-    '''for key in bulk_stat:
-        tester(bulk_stat[key]['S'],bulk_stat[key]['C'],bulk_stat[key]['P'],bulk_stat[key]['B'],bulk_stat[key]['D'],"B")'''
     return
 
 def threader():
@@ -324,22 +325,131 @@ def bulk_stats(bulk_id):
         ctr += 1
     print("------------------------------------------------------------------------------------------------------------------------------------------------------")
     return
-#Testing part
+
+def bulk_sim_generator(stat,init,scrip,strategy,params,capital):
+    data         = c.fetch_scrip_data(scrip,init,0)
+    bulk_id      = c.gen_id("strategy","bulk_id")
+    d_params     = con_param(params)
+    p_keys       = list(d_params.keys())
+    params       = []
+    sim_comb     = []
+    sim_dict     = {}
+    stat_map     = {}
+    ctr          = 0
+    #Generate the combinations for a given parameter
+    for p in d_params:
+        params.append(list(d_params[p]))
+
+    #Below function creates combinations far a given list of list    
+    for comb in it.product(*params):
+        sim_comb.append(comb)
+    
+    #For each of the combination convert it to a dict with values from p_keys
+    sim_dict = prep_sim_dict(init,scrip,p_keys,sim_comb)
+    
+    if stat:
+        #Check if the run exits with a same combination and copy that data
+        for comb in sim_dict:
+            if map_existing(sim_dict[comb],bulk_id,"orb"):
+                c.pr("I","Simulation Data Exists Not Running For Params "+str(sim_dict[comb]),1)
+            else:
+                stat_map[ctr] = {}
+                stat_map[ctr]['S'] = strategy
+                stat_map[ctr]['C'] = capital 
+                stat_map[ctr]['B'] = bulk_id
+                stat_map[ctr]['D'] = data
+                stat_map[ctr]['P'] = sim_dict[comb]
+                ctr = ctr + 1
+    else:
+        #Treat every combination as a new one
+        for comb in sim_dict:
+            stat_map[ctr] = {}
+            stat_map[ctr]['S'] = strategy
+            stat_map[ctr]['C'] = capital 
+            stat_map[ctr]['B'] = bulk_id
+            stat_map[ctr]['D'] = data
+            stat_map[ctr]['P'] = sim_dict[comb]
+            ctr = ctr + 1
+    #Sims are launched from here
+    bulk_launch(stat_map)    
+    #bulk_stats(bulk_id)  
+    return
+
+def prep_sim_dict(init,scrip,p_keys,sim_comb):
+    ret_comb = {}
+    m_ctr    = 0 
+    for comb in sim_comb:
+        ctr = 0
+        ret_comb[m_ctr]          = {}
+        ret_comb[m_ctr]['START'] = init
+        ret_comb[m_ctr]['SC'] = scrip
+        for p in p_keys:
+            ret_comb[m_ctr][p] = float(comb[ctr])    
+            ctr = ctr + 1
+    #Remove this in PROD
+        if m_ctr == 3000:
+            #print(ret_comb)
+            break
+    #Remove this in PROD
+        m_ctr = m_ctr + 1
+    return ret_comb
+
+def con_param(params):
+    ret_hash = {}
+    for p in params:
+        pval  = str(params[p]).split(":")
+        start = float(pval[0])
+        end   = float(pval[1])
+        rng   = float(pval[2])
+        ret_hash[p] = [] 
+        #c.pr("I",p+" ---> [Start -> "+str(start)+"] [End -> "+str(end)+"] [Range -> "+str(rng)+"]",1)
+        ret_hash[p] = np.arange(start,end,rng)
+    return ret_hash
+
+#Testing Part Below
 #{'MAX': 15, 'THR': 14, 'VAR': 0.003, 'START': 151477753, 'SL': 0.002, 'T1': 0.004, 'T2': 0.006, 'SC': 'AXISBANK', 'ID': 'VFVAAFNI'}
 star_param = {}
-star_param['MAX']     = 15    #Maximum Data points to check 
-star_param['THR']     = 14 
-star_param['VAR']     = 0.003 #Maximum Variance in price
+star_param['GP']       = 1    #Maximum Data points to check 
+star_param['THR']      = 14 
+star_param['START']    = 151477753 #Starting Point June 1
+star_param['SL']       = 0.002
+star_param['T1']       = 0.004
+star_param['T2']       = 0.006
+star_param['MAX']      = 15
+star_param['VAR']      = 0.002
+star_param['SC']       = "ADANIPORTS"
+
+#bulk_test(0,151477753,"ADANIPORTS","ohl")
+
+#print(c.fetch_scrip_data("NIFTY","1518148860","1518126000"))
+#tester("ohl",10000,star_param,"NULL",{},"I")
+
+#TEST CASE FOR ORB
+star_param = {}
 star_param['START']   = 151477753 #Starting Point June 1
 star_param['SL']      = 0.002
 star_param['T1']      = 0.004
 star_param['T2']      = 0.006
-star_param['SC']      = "AXISBANK"
+star_param['SC']      = "NIFTY_FUT"
+star_param['CL']      = 1
+star_param['VC']      = 1.5
+star_param['TF']      = 10
+star_param['BP']      = 0.002
+star_param['MC']      = 15
 
-#{'MAX': 16, 'THR': 15, 'VAR': 0.002, 'START': 151477753, 'SL': 0.002, 'T1': 0.004, 'T2': 0.011, 'SC': 'AXISBANK', 'ID': '6OSZUEEP'}
-#print(c.fetch_scrip_data("NIFTY","1518148860","1518126000"))
-#tester("ohl",150000,star_param,"NULL",{},"I")
-sim.display_stats("VFT30IAE")
-#bulk_test(1,151477753,"HDFCBANK","ohl")
-#bulk_stats("SAIIXKLO") 
-#bulk_stats("HVZ4EG6J")
+#tester("orb",100000,star_param,"NULL",{},"I")
+
+#sim.display_stats("VFT30IAE")
+
+#Bulk Sim generator takes param as input which contains the list of valid parameters and the values to be generated
+param            = {}
+param['SL']      = "0.001:0.003:0.001"
+param['T1']      = "0.003:0.005:0.001"
+param['T2']      = "0.005:0.007:0.001"
+param['CL']      = "1:4:1"
+param['VC']      = "1.1:2.0:0.1"
+param['TF']      = "1:5:1"
+param['BP']      = "0.001:0.003:0.001"
+param['MC']      = "10:15:1"
+
+bulk_sim_generator(1,151477753,"NIFTY_FUT","orb",param,100000)
